@@ -164,12 +164,12 @@ local function teleportFunction(cframe, duration, ifCoin)
 			restorePhysics()
 		end
 		return handle
-	elseif settings["Mode"] == "Safe" then
+		elseif settings["Mode"] == "Safe" then
 		-- Always stay underground. Never restore physics / collisions while farming.
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 
-		local TUNNEL_OFFSET = -8 -- how far under the lowest point we travel
+		local TUNNEL_OFFSET = -3 -- less deep so it stays closer to the surface
 		local startPos = humanoidRootPart.Position
 		local targPos = cframe.Position
 
@@ -185,6 +185,24 @@ local function teleportFunction(cframe, duration, ifCoin)
 		local horizTime = math.max(horizDist / settings["AutofarmSpeed"], 0.05)
 
 		local handle = {}
+
+		-- Keep velocity + PlatformStand locked continuously so it never falls
+		-- after a tween finishes.
+		task.spawn(function()
+			while not cancelled do
+				if humanoidRootPart and humanoidRootPart.Parent then
+					humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+					humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+					humanoid.PlatformStand = true
+					humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+					upperTorso.CanCollide = false
+					lowerTorso.CanCollide = false
+					humanoidRootPart.CanCollide = false
+				end
+				task.wait(0.03)
+			end
+		end)
+
 		task.spawn(function()
 			-- 1. Dive straight down (or stay if already underground)
 			if math.abs(startPos.Y - tunnelY) > 0.5 then
@@ -196,6 +214,11 @@ local function teleportFunction(cframe, duration, ifCoin)
 			-- 2. Horizontal tunnel to under the coin
 			if not tweenTo(wp2, horizTime) then return end
 
+			-- Snap exactly onto the tunnel point and hold
+			humanoidRootPart.CFrame = wp2
+			humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+			humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+
 			-- 3. Stay underground – teleport the coin down to us (aura)
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
@@ -204,7 +227,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 			task.wait(settings["TweenDelay"])
 
 			-- Intentionally do NOT call restorePhysics() or re-enable CanCollide.
-			-- Keeping the stabilizer prevents the glitch.
+			-- Stabilizer keeps running until Cancel is called.
 		end)
 
 		function handle:Cancel()
@@ -213,6 +236,10 @@ local function teleportFunction(cframe, duration, ifCoin)
 			-- On cancel we still stay underground / locked – do not restore physics
 			if coinCFrame then
 				humanoidRootPart.CFrame = CFrame.new(coinCFrame.Position.X, tunnelY, coinCFrame.Position.Z)
+			end
+			if humanoidRootPart then
+				humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+				humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 			end
 		end
 		return handle
