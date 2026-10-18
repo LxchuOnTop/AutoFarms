@@ -172,12 +172,17 @@ local function teleportFunction(cframe, duration, ifCoin)
 			restorePhysics()
 		end
 		return handle
-		elseif settings["Mode"] == "Safe" then
+	elseif settings["Mode"] == "Safe" then
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 
 		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
-		local targetCFrame = CFrame.new(cframe.Position) * currentRot
+		local targetPos = Vector3.new(
+			cframe.Position.X,
+			cframe.Position.Y - settings["SafeModeOffset"],
+			cframe.Position.Z
+		)
+		local targetCFrame = CFrame.new(targetPos) * currentRot
 
 		safeHold.active = true
 		safeHold.targetCFrame = targetCFrame
@@ -207,6 +212,11 @@ local function teleportFunction(cframe, duration, ifCoin)
 		task.spawn(function()
 			if tween then tween.Completed:Wait() end
 			if cancelled then return end
+
+			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
+				ifCoin.CFrame = humanoidRootPart.CFrame
+			end
+
 			task.wait(settings["TweenDelay"])
 		end)
 
