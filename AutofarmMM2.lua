@@ -3,7 +3,7 @@ local settings = {
 	["AutofarmSpeed"] = 27.5,
 	["TweenDelay"] = 0.09,
 	["CoinAuraDistance"] = 6,
-	["CoinType"] = "Coin", -- we will be updating this dw
+	["CoinType"] = "Coin",
 	["ResetIfDone"] = true,
 	["ShootMurdererIfDone"] = false,
 	["KillEveryoneIfDone"] = false,
@@ -83,6 +83,7 @@ local function disablePhysics(stopAnims)
 end
 
 local function restorePhysics()
+	humanoidRootPart.Anchored = false
 	upperTorso.CanCollide = true
 	lowerTorso.CanCollide = true
 	humanoidRootPart.CanCollide = true
@@ -92,25 +93,26 @@ local function restorePhysics()
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 end
 
+local function stabilize()
+	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+	humanoidRootPart.Anchored = true
+end
+
+local function unstabilize()
+	humanoidRootPart.Anchored = false
+	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+end
+
 local function teleportFunction(cframe, duration, ifCoin)
 	local cancelled = false
 	local currentTween = nil
 	local coinCFrame = ifCoin and ifCoin.Parent and ifCoin.CFrame or nil
 
-	local function lockVelocity()
-		task.spawn(function()
-			while not cancelled do
-				local tw = currentTween
-				if not tw or tw.PlaybackState ~= Enum.PlaybackState.Playing then break end
-				humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-				humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-				task.wait(0.05)
-			end
-		end)
-	end
-
 	local function tweenTo(targetCFrame, dur)
 		if cancelled then return false end
+		if not humanoidRootPart or not humanoidRootPart.Parent then return false end
 		if dur <= 0 then
 			humanoidRootPart.CFrame = targetCFrame
 			return not cancelled
@@ -121,7 +123,6 @@ local function teleportFunction(cframe, duration, ifCoin)
 			{CFrame = targetCFrame}
 		)
 		currentTween:Play()
-		lockVelocity()
 		currentTween.Completed:Wait()
 		return not cancelled
 	end
@@ -136,15 +137,18 @@ local function teleportFunction(cframe, duration, ifCoin)
 	if settings["Mode"] == "Standing" then
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
+		stabilize()
 		local handle = {}
 
 		task.spawn(function()
-			if not tweenTo(cframe, duration) then return end
-			task.wait(0.1)
+			if not tweenTo(cframe, duration) then
+				unstabilize()
+				return
+			end
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
-			task.wait(settings["TweenDelay"])
+			unstabilize()
 			if not cancelled then
 				local animator = humanoid:FindFirstChildOfClass("Animator")
 				if not animator then
@@ -158,6 +162,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 		function handle:Cancel()
 			cancelled = true
 			if currentTween then currentTween:Cancel() end
+			unstabilize()
 			if coinCFrame then
 				humanoidRootPart.CFrame = coinCFrame + Vector3.new(0, 3, 0)
 			end
@@ -167,6 +172,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 	elseif settings["Mode"] == "Safe" then
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
+		stabilize()
 
 		local OFFSET = -5
 		local ROTATE = CFrame.Angles(math.rad(90), 0, 0)
@@ -177,7 +183,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		local wp1 = CFrame.new(startPos.X, tunnelY, startPos.Z) * ROTATE
 		local wp2 = CFrame.new(targPos.X, tunnelY, targPos.Z) * ROTATE
-		local wp3 = CFrame.new(targPos.X, tunnelY, targPos.Z) * ROTATE
+		local wp3 = CFrame.new(targPos.X, targPos.Y, targPos.Z)
 
 		local diveTime = 0.15
 		local horizDist = (Vector2.new(startPos.X, startPos.Z) - Vector2.new(targPos.X, targPos.Z)).Magnitude
@@ -186,23 +192,23 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		local handle = {}
 		task.spawn(function()
-			if not tweenTo(wp1, diveTime) then return end
-			if not tweenTo(wp2, horizTime) then return end
-
-			humanoidRootPart.CFrame = wp2 + Vector3.new(0, math.abs(OFFSET), 0) * ROTATE
-			if not cancelled then
-				humanoidRootPart.CFrame = cframe + Vector3.new(0, -3, 0) * ROTATE
+			if not tweenTo(wp1, diveTime) then
+				unstabilize()
+				return
 			end
-			task.wait(0.05)
+			if not tweenTo(wp2, horizTime) then
+				unstabilize()
+				return
+			end
+			if not tweenTo(wp3, riseTime) then
+				unstabilize()
+				return
+			end
 
-			upperTorso.CanCollide = true
-			lowerTorso.CanCollide = true
-			humanoidRootPart.CanCollide = true
-			task.wait(0.1)
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
-				humanoidRootPart.CFrame = ifCoin.CFrame
+				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
-			task.wait(settings["TweenDelay"])
+			unstabilize()
 			if not cancelled then
 				local animator = humanoid:FindFirstChildOfClass("Animator")
 				if not animator then
@@ -216,6 +222,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 		function handle:Cancel()
 			cancelled = true
 			if currentTween then currentTween:Cancel() end
+			unstabilize()
 			if coinCFrame then
 				humanoidRootPart.CFrame = coinCFrame + Vector3.new(0, 3, 0)
 			end
