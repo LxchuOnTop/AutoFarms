@@ -262,7 +262,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 					success = tweenTo(wp2, horizontalTime)
 				end
 
-				if success and isValid() then
+				if success and isValid() then<
 					local finalPosition = Vector3.new(
 						targetPos.X,
 						targetPos.Y - 3,
@@ -274,9 +274,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 				end
 			end
 
-			if success and isValid() and ifCoin
-				and ifCoin.Parent
-				and ifCoin:FindFirstChild("TouchInterest") then
+			if success and isValid() and ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 
 				setStatus("STATUS: Moving Coin to Player...")
 
@@ -448,7 +446,7 @@ if character and humanoid then
 end
 
 local function detect()
-	if settings["FullyOptimizeWhileGrinding"] == true then
+	--[[if settings["FullyOptimizeWhileGrinding"] == true then
 		for _, descendant in ipairs(workspace:GetDescendants()) do
 			if (descendant:IsA("BasePart") or descendant:IsA("MeshPart")) and not players:GetPlayerFromCharacter(descendant:FindFirstAncestorOfClass("Model")) then
 				descendant.Transparency = 1
@@ -465,7 +463,7 @@ local function detect()
 				descendant.Transparency = 0
 			end
 		end
-	end
+	end]]
 end
 
 coinCollected.OnClientEvent:Connect(function(coinType, current, max)
