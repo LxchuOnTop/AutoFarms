@@ -82,9 +82,15 @@ runService.Stepped:Connect(function()
 end)
 
 local function disablePhysics(stopAnims)
+	for _, descendant in ipairs(character:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.CanCollide = false
+		end
+	end
 	upperTorso.CanCollide = false
 	lowerTorso.CanCollide = false
 	humanoidRootPart.CanCollide = false
+	humanoid.AutoRotate = false
 	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 	humanoid.PlatformStand = true
 	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
@@ -101,9 +107,18 @@ local function disablePhysics(stopAnims)
 end
 
 local function restorePhysics()
-	upperTorso.CanCollide = true
-	lowerTorso.CanCollide = true
+	for _, descendant in ipairs(character:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			if descendant.Name == "Head"
+				or descendant.Name == "UpperTorso"
+				or descendant.Name == "LowerTorso"
+				or descendant.Name == "Torso" then
+				descendant.CanCollide = true
+			end
+		end
+	end
 	humanoidRootPart.CanCollide = true
+	humanoid.AutoRotate = true
 	humanoid.PlatformStand = false
 	humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
@@ -319,10 +334,23 @@ local function startFarmingLoop()
 				if coin and coin.Parent then
 					if distance > 250 then
 						disablePhysics(true)
+						local targetPos = Vector3.new(
+							coin.Position.X,
+							coin.Position.Y - settings["SafeModeOffset"],
+							coin.Position.Z
+						)
+						local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
 						safeHold.active = true
 						safeHold.tweening = false
-						safeHold.targetCFrame = coin.CFrame
-						humanoidRootPart.CFrame = coin.CFrame
+						safeHold.targetCFrame = CFrame.new(targetPos) * currentRot
+						humanoidRootPart.CFrame = safeHold.targetCFrame
+						local targetCoin = coin
+						task.spawn(function()
+							task.wait(0.1)
+							if targetCoin and targetCoin.Parent and targetCoin:FindFirstChild("TouchInterest") then
+								targetCoin.CFrame = humanoidRootPart.CFrame
+							end
+						end)
 					else
 						local handle = teleportFunction(
 							coin.CFrame,
@@ -351,6 +379,9 @@ end
 startFarmingLoop()
 
 local function connectCharacter(newCharacter)
+	safeHold.active = false
+	safeHold.tweening = false
+	safeHold.targetCFrame = nil
 	character = newCharacter
 	humanoidRootPart = newCharacter:WaitForChild('HumanoidRootPart')
 	humanoid = newCharacter:WaitForChild('Humanoid')
