@@ -192,6 +192,10 @@ local function teleportFunction(cframe, duration, ifCoin)
 		setStatus("STATUS: Going for another coin.")
 
 		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
+		if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
+			currentRot = currentRot * CFrame.Angles(-math.pi / 2, 0, 0)
+			humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
+		end
 		local targetPos = Vector3.new(
 			cframe.Position.X,
 			cframe.Position.Y - settings["SafeModeOffset"],
@@ -340,6 +344,10 @@ local function startFarmingLoop()
 							coin.Position.Z
 						)
 						local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
+						if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
+							currentRot = currentRot * CFrame.Angles(-math.pi / 2, 0, 0)
+							humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
+						end
 						safeHold.active = true
 						safeHold.tweening = false
 						safeHold.targetCFrame = CFrame.new(targetPos) * currentRot
