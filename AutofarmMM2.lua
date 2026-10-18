@@ -13,7 +13,41 @@ local settings = {
 	["FullyOptimizeWhileGrinding"] = false,
 }
 
-local player = game:GetService('Players').LocalPlayer
+local players = game:GetService("Players")
+
+local function setCharacterCollision(character)
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+		end
+	end
+
+	character.DescendantAdded:Connect(function(part)
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+		end
+	end)
+end
+
+local function onPlayerAdded(player)
+	if player ~= players.LocalPlayer then
+		player.CharacterAdded:Connect(function(character)
+			setCharacterCollision(character)
+		end)
+
+		if player.Character then
+			setCharacterCollision(player.Character)
+		end
+	end
+end
+
+for _, player in ipairs(players:GetPlayers()) do
+	onPlayerAdded(player)
+end
+
+players.PlayerAdded:Connect(onPlayerAdded)
+
+local player = players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild('HumanoidRootPart')
 local lowerTorso = character:WaitForChild('LowerTorso')
@@ -25,7 +59,6 @@ local runService = game:GetService('RunService')
 local tweenService = game:GetService("TweenService")
 local virtualUser = game:GetService("VirtualUser")
 local userInputService = game:GetService("UserInputService")
-local players = game:GetService("Players")
 
 local remotes = replicatedStorage:WaitForChild('Remotes')
 local gameplay = remotes:WaitForChild('Gameplay')
@@ -193,7 +226,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
 		if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-			currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
+			currentRot = currentRot * CFrame.Angles(-math.pi / 2, 0, 0)
 			humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 		end
 		local targetPos = Vector3.new(
@@ -345,7 +378,7 @@ local function startFarmingLoop()
 						)
 						local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
 						if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-							currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
+							currentRot = currentRot * CFrame.Angles(-math.pi / 2, 0, 0)
 							humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 						end
 						safeHold.active = true
