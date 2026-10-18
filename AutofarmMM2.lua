@@ -2,6 +2,7 @@ local settings = {
 	["Mode"] = "Safe",
 	["AutofarmSpeed"] = 27.5,
 	["TweenDelay"] = 0.09,
+	["SafeModeOffset"] = 4,
 	["CoinAuraDistance"] = 6,
 	["CoinType"] = "Candy",
 	["ResetIfDone"] = true,
@@ -157,7 +158,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 
-		local TUNNEL_OFFSET = -6
+		local TUNNEL_OFFSET = -settings["SafeModeOffset"]
 		local startPos = humanoidRootPart.Position
 		local targPos = cframe.Position
 
@@ -524,7 +525,7 @@ if settings["UI"] == true then
 		TOTALCOIN.TextStrokeTransparency = 0.900
 		TOTALCOIN.TextWrapped = true
 		player.PlayerGui:WaitForChild('UI').Enabled = true
-	elseif settings["UIMode"] == 2 then
+		elseif settings["UIMode"] == 2 then
 		local Lxchu = Instance.new("ScreenGui")
 		Lxchu.ResetOnSpawn = false
 		local UI = Instance.new("Frame")
@@ -544,6 +545,8 @@ if settings["UI"] == true then
 		local UICorner_7 = Instance.new("UICorner")
 		local COINTYPE = Instance.new("TextBox")
 		local UICorner_8 = Instance.new("UICorner")
+		local SAFEMODEOFFSET = Instance.new("TextBox")
+		local UICorner_13 = Instance.new("UICorner")
 		local KILL = Instance.new("TextButton")
 		local UICorner_9 = Instance.new("UICorner")
 		local RESET = Instance.new("TextButton")
@@ -564,7 +567,7 @@ if settings["UI"] == true then
 		UI.BorderSizePixel = 0
 		UI.Position = UDim2.new(0.5, 0, 0.5, 0)
 		if userInputService.TouchEnabled == false then
-			UI.Size = UDim2.new(0, 500, 0, 300)
+			UI.Size = UDim2.new(0, 500, 0, 380)
 		else
 			UI.Size = UDim2.new(0, 150, 0, 100)
 		end
@@ -592,8 +595,8 @@ if settings["UI"] == true then
 		Tab01.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 		Tab01.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Tab01.BorderSizePixel = 0
-		Tab01.Position = UDim2.new(0.5, 0, 0.540000021, 0)
-		Tab01.Size = UDim2.new(0, 500, 0, 276)
+		Tab01.Position = UDim2.new(0.5, 0, 0.54, 0)
+		Tab01.Size = UDim2.new(0, 500, 0, 340)
 		UICorner_2.CornerRadius = UDim.new(0, 10)
 		UICorner_2.Parent = Tab01
 		SPEED.Name = "SPEED"
@@ -602,7 +605,7 @@ if settings["UI"] == true then
 		SPEED.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		SPEED.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		SPEED.BorderSizePixel = 0
-		SPEED.Position = UDim2.new(0.5, 0, 0.25, 0)
+		SPEED.Position = UDim2.new(0.5, 0, 0.21, 0)
 		SPEED.Size = UDim2.new(0, 350, 0, 25)
 		SPEED.Font = Enum.Font.SourceSansBold
 		SPEED.PlaceholderColor3 = Color3.fromRGB(255, 255, 255)
@@ -622,7 +625,7 @@ if settings["UI"] == true then
 		SAFE.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		SAFE.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		SAFE.BorderSizePixel = 0
-		SAFE.Position = UDim2.new(0.230000004, 0, 0.0900000036, 0)
+		SAFE.Position = UDim2.new(0.230000004, 0, 0.075, 0)
 		SAFE.Size = UDim2.new(0, 75, 0, 50)
 		SAFE.AutoButtonColor = false
 		SAFE.Font = Enum.Font.SourceSansBold
@@ -640,7 +643,7 @@ if settings["UI"] == true then
 		STANDING.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		STANDING.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		STANDING.BorderSizePixel = 0
-		STANDING.Position = UDim2.new(0.769999981, 0, 0.0900000036, 0)
+		STANDING.Position = UDim2.new(0.769999981, 0, 0.075, 0)
 		STANDING.Size = UDim2.new(0, 75, 0, 50)
 		STANDING.AutoButtonColor = false
 		STANDING.Font = Enum.Font.SourceSansBold
@@ -658,7 +661,7 @@ if settings["UI"] == true then
 		DELAY.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		DELAY.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		DELAY.BorderSizePixel = 0
-		DELAY.Position = UDim2.new(0.5, 0, 0.349999994, 0)
+		DELAY.Position = UDim2.new(0.5, 0, 0.30, 0)
 		DELAY.Size = UDim2.new(0, 350, 0, 25)
 		DELAY.Font = Enum.Font.SourceSansBold
 		DELAY.PlaceholderColor3 = Color3.fromRGB(255, 255, 255)
@@ -678,7 +681,7 @@ if settings["UI"] == true then
 		CAURADISTANCE.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		CAURADISTANCE.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		CAURADISTANCE.BorderSizePixel = 0
-		CAURADISTANCE.Position = UDim2.new(0.5, 0, 0.449999988, 0)
+		CAURADISTANCE.Position = UDim2.new(0.5, 0, 0.39, 0)
 		CAURADISTANCE.Size = UDim2.new(0, 350, 0, 25)
 		CAURADISTANCE.Font = Enum.Font.SourceSansBold
 		CAURADISTANCE.PlaceholderColor3 = Color3.fromRGB(255, 255, 255)
@@ -698,7 +701,7 @@ if settings["UI"] == true then
 		COINTYPE.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		COINTYPE.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		COINTYPE.BorderSizePixel = 0
-		COINTYPE.Position = UDim2.new(0.5, 0, 0.550000012, 0)
+		COINTYPE.Position = UDim2.new(0.5, 0, 0.48, 0)
 		COINTYPE.Size = UDim2.new(0, 350, 0, 25)
 		COINTYPE.Font = Enum.Font.SourceSansBold
 		COINTYPE.PlaceholderColor3 = Color3.fromRGB(255, 255, 255)
@@ -712,13 +715,33 @@ if settings["UI"] == true then
 		COINTYPE.TextWrapped = true
 		UICorner_8.CornerRadius = UDim.new(0, 10)
 		UICorner_8.Parent = COINTYPE
+		SAFEMODEOFFSET.Name = "SAFEMODEOFFSET"
+		SAFEMODEOFFSET.Parent = Tab01
+		SAFEMODEOFFSET.AnchorPoint = Vector2.new(0.5, 0.5)
+		SAFEMODEOFFSET.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		SAFEMODEOFFSET.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		SAFEMODEOFFSET.BorderSizePixel = 0
+		SAFEMODEOFFSET.Position = UDim2.new(0.5, 0, 0.57, 0)
+		SAFEMODEOFFSET.Size = UDim2.new(0, 350, 0, 25)
+		SAFEMODEOFFSET.Font = Enum.Font.SourceSansBold
+		SAFEMODEOFFSET.PlaceholderColor3 = Color3.fromRGB(255, 255, 255)
+		SAFEMODEOFFSET.PlaceholderText = "SAFE MODE OFFSET"
+		SAFEMODEOFFSET.Text = "4"
+		SAFEMODEOFFSET.TextColor3 = Color3.fromRGB(255, 255, 255)
+		SAFEMODEOFFSET.TextScaled = true
+		SAFEMODEOFFSET.TextSize = 14.000
+		SAFEMODEOFFSET.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
+		SAFEMODEOFFSET.TextStrokeTransparency = 0.900
+		SAFEMODEOFFSET.TextWrapped = true
+		UICorner_13.CornerRadius = UDim.new(0, 10)
+		UICorner_13.Parent = SAFEMODEOFFSET
 		KILL.Name = "KILL"
 		KILL.Parent = Tab01
 		KILL.AnchorPoint = Vector2.new(0.5, 0.5)
 		KILL.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		KILL.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		KILL.BorderSizePixel = 0
-		KILL.Position = UDim2.new(0.769999981, 0, 0.699999988, 0)
+		KILL.Position = UDim2.new(0.769999981, 0, 0.71, 0)
 		KILL.Size = UDim2.new(0, 75, 0, 50)
 		KILL.AutoButtonColor = false
 		KILL.Font = Enum.Font.SourceSansBold
@@ -736,7 +759,7 @@ if settings["UI"] == true then
 		RESET.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		RESET.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		RESET.BorderSizePixel = 0
-		RESET.Position = UDim2.new(0.230000004, 0, 0.699999988, 0)
+		RESET.Position = UDim2.new(0.230000004, 0, 0.71, 0)
 		RESET.Size = UDim2.new(0, 75, 0, 50)
 		RESET.AutoButtonColor = false
 		RESET.Font = Enum.Font.SourceSansBold
@@ -754,7 +777,7 @@ if settings["UI"] == true then
 		SHOOT.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		SHOOT.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		SHOOT.BorderSizePixel = 0
-		SHOOT.Position = UDim2.new(0.5, 0, 0.699999988, 0)
+		SHOOT.Position = UDim2.new(0.5, 0, 0.71, 0)
 		SHOOT.Size = UDim2.new(0, 75, 0, 50)
 		SHOOT.AutoButtonColor = false
 		SHOOT.Font = Enum.Font.SourceSansBold
@@ -772,7 +795,7 @@ if settings["UI"] == true then
 		OPTIMIZE.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 		OPTIMIZE.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		OPTIMIZE.BorderSizePixel = 0
-		OPTIMIZE.Position = UDim2.new(0.5, 0, 0.850000024, 0)
+		OPTIMIZE.Position = UDim2.new(0.5, 0, 0.85, 0)
 		OPTIMIZE.Size = UDim2.new(0, 350, 0, 25)
 		OPTIMIZE.AutoButtonColor = false
 		OPTIMIZE.Font = Enum.Font.SourceSansBold
@@ -897,6 +920,21 @@ if settings["UI"] == true then
 			local value = tostring(COINTYPE.Text)
 			if value then
 				settings["CoinType"] = value
+			end
+		end)
+		if settings["SafeModeOffset"] then
+			SAFEMODEOFFSET.Text = tostring(settings["SafeModeOffset"])
+		end
+		SAFEMODEOFFSET.MouseEnter:Connect(function()
+			tweenService:Create(SAFEMODEOFFSET, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+		end)
+		SAFEMODEOFFSET.MouseLeave:Connect(function()
+			tweenService:Create(SAFEMODEOFFSET, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+		end)
+		SAFEMODEOFFSET.FocusLost:Connect(function()
+			local value = tonumber(SAFEMODEOFFSET.Text)
+			if value then
+				settings["SafeModeOffset"] = value
 			end
 		end)
 		local uStroke3 = Instance.new('UIStroke', KILL)
