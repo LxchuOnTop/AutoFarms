@@ -193,7 +193,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
 		if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-			currentRot = currentRot * CFrame.Angles(-math.pi / 2, 0, 0)
+			currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
 			humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 		end
 		local targetPos = Vector3.new(
@@ -345,7 +345,7 @@ local function startFarmingLoop()
 						)
 						local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
 						if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-							currentRot = currentRot * CFrame.Angles(-math.pi / 2, 0, 0)
+							currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
 							humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 						end
 						safeHold.active = true
