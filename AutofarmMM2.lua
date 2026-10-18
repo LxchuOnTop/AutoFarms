@@ -64,11 +64,23 @@ local function setStatus(txt)
 	end)
 end
 
+local activeHold = nil
+
+local function clearActiveHold()
+	if activeHold then
+		pcall(function()
+			if activeHold.pos then activeHold.pos:Destroy() end
+			if activeHold.ori then activeHold.ori:Destroy() end
+			if activeHold.attach then activeHold.attach:Destroy() end
+		end)
+		activeHold = nil
+	end
+end
+
 local function disablePhysics(stopAnims)
 	upperTorso.CanCollide = false
 	lowerTorso.CanCollide = false
 	humanoidRootPart.CanCollide = false
-	humanoidRootPart.Anchored = true
 	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 	humanoid.PlatformStand = true
 	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
@@ -85,7 +97,6 @@ local function disablePhysics(stopAnims)
 end
 
 local function restorePhysics()
-	humanoidRootPart.Anchored = false
 	upperTorso.CanCollide = true
 	lowerTorso.CanCollide = true
 	humanoidRootPart.CanCollide = true
@@ -155,50 +166,58 @@ local function teleportFunction(cframe, duration, ifCoin)
 		end
 		return handle
 	elseif settings["Mode"] == "Safe" then
+		clearActiveHold()
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 
-		local TUNNEL_OFFSET = -settings["SafeModeOffset"]
 		local startPos = humanoidRootPart.Position
-		local targPos = cframe.Position
+		local TUNNEL_OFFSET = -settings["SafeModeOffset"]
+		local tunnelY = startPosition.Y + TUNNEL_OFFSET
+		local targetPos = Vector3.new(startPos.X, tunnelY, startPos.Z)
+		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
+		local targetCFrame = CFrame.new(targetPos) * currentRot
 
-		local tunnelY = math.min(startPosition.Y, targPos.Y) + TUNNEL_OFFSET
+		local attach = Instance.new("Attachment")
+		attach.Parent = humanoidRootPart
 
-		local wp1 = CFrame.new(startPos.X, tunnelY, startPos.Z)
-		local wp2 = CFrame.new(targPos.X, tunnelY, targPos.Z)
+		local alignPos = Instance.new("AlignPosition")
+		alignPos.Attachment0 = attach
+		alignPos.Mode = Enum.PositionAlignmentMode.OneAttachment
+		alignPos.Position = humanoidRootPart.Position
+		alignPos.RigidityEnabled = true
+		alignPos.MaxForce = math.huge
+		alignPos.Responsiveness = 200
+		alignPos.Parent = humanoidRootPart
 
-		local diveTime = 0.12
-		local horizDist = (Vector2.new(startPos.X, startPos.Z) - Vector2.new(targPos.X, targPos.Z)).Magnitude
-		local horizTime = math.max(horizDist / settings["AutofarmSpeed"], 0.05)
+		local alignOri = Instance.new("AlignOrientation")
+		alignOri.Attachment0 = attach
+		alignOri.Mode = Enum.OrientationAlignmentMode.OneAttachment
+		alignOri.CFrame = humanoidRootPart.CFrame
+		alignOri.RigidityEnabled = true
+		alignOri.MaxTorque = math.huge
+		alignOri.Responsiveness = 200
+		alignOri.Parent = humanoidRootPart
+
+		activeHold = {pos = alignPos, ori = alignOri, attach = attach}
 
 		local handle = {}
+		local posTween, oriTween
+
+		if math.abs(startPos.Y - tunnelY) > 0.05 then
+			local tweenInfo = TweenInfo.new(0.12, Enum.EasingStyle.Linear)
+			posTween = tweenService:Create(alignPos, tweenInfo, {Position = targetPos})
+			oriTween = tweenService:Create(alignOri, tweenInfo, {CFrame = targetCFrame})
+			posTween:Play()
+			oriTween:Play()
+		else
+			alignPos.Position = targetPos
+			alignOri.CFrame = targetCFrame
+		end
 
 		task.spawn(function()
-			while not cancelled do
-				if humanoidRootPart and humanoidRootPart.Parent then
-					humanoidRootPart.Anchored = true
-					humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-					humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-					humanoid.PlatformStand = true
-					humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-					upperTorso.CanCollide = false
-					lowerTorso.CanCollide = false
-					humanoidRootPart.CanCollide = false
-				end
-				task.wait(0.03)
-			end
-		end)
+			if posTween then posTween.Completed:Wait() end
+			if cancelled then return end
 
-		task.spawn(function()
-			if math.abs(startPos.Y - tunnelY) > 0.5 then
-				if not tweenTo(wp1, diveTime) then return end
-			else
-				humanoidRootPart.CFrame = wp1
-			end
-
-			if not tweenTo(wp2, horizTime) then return end
-
-			humanoidRootPart.CFrame = wp2
 			humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
 			humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 
@@ -211,14 +230,8 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		function handle:Cancel()
 			cancelled = true
-			if currentTween then currentTween:Cancel() end
-			if coinCFrame then
-				humanoidRootPart.CFrame = CFrame.new(coinCFrame.Position.X, tunnelY, coinCFrame.Position.Z)
-			end
-			if humanoidRootPart then
-				humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-				humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-			end
+			if posTween then posTween:Cancel() end
+			if oriTween then oriTween:Cancel() end
 		end
 		return handle
 	end
@@ -246,7 +259,7 @@ local function functionInnocentSheriffHeroMurderer()
 							targetHRP:SetAttribute('AmIAlive', nil)
 						end
 						task.wait(0.3)
-						targetHRP.Anchored = false
+						targetHRP.Anchored = true
 						targetHRP.CFrame = savedCFrame
 					end
 				end
