@@ -3,7 +3,7 @@ local settings = {
 	["AutofarmSpeed"] = 27.5,
 	["TweenDelay"] = 0.09,
 	["CoinAuraDistance"] = 6,
-	["CoinType"] = "Candy",
+	["CoinType"] = "Coin",
 	["ResetIfDone"] = true,
 	["ShootMurdererIfDone"] = false,
 	["KillEveryoneIfDone"] = false,
@@ -67,6 +67,7 @@ local function disablePhysics(stopAnims)
 	upperTorso.CanCollide = false
 	lowerTorso.CanCollide = false
 	humanoidRootPart.CanCollide = false
+	humanoidRootPart.Anchored = true
 	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 	humanoid.PlatformStand = true
 	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
@@ -83,6 +84,7 @@ local function disablePhysics(stopAnims)
 end
 
 local function restorePhysics()
+	humanoidRootPart.Anchored = false
 	upperTorso.CanCollide = true
 	lowerTorso.CanCollide = true
 	humanoidRootPart.CanCollide = true
@@ -97,18 +99,6 @@ local function teleportFunction(cframe, duration, ifCoin)
 	local currentTween = nil
 	local coinCFrame = ifCoin and ifCoin.Parent and ifCoin.CFrame or nil
 
-	local function lockVelocity()
-		task.spawn(function()
-			while not cancelled do
-				local tw = currentTween
-				if not tw or tw.PlaybackState ~= Enum.PlaybackState.Playing then break end
-				humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-				humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-				task.wait(0.05)
-			end
-		end)
-	end
-
 	local function tweenTo(targetCFrame, dur)
 		if cancelled then return false end
 		if dur <= 0 then
@@ -121,7 +111,6 @@ local function teleportFunction(cframe, duration, ifCoin)
 			{CFrame = targetCFrame}
 		)
 		currentTween:Play()
-		lockVelocity()
 		currentTween.Completed:Wait()
 		return not cancelled
 	end
@@ -164,19 +153,16 @@ local function teleportFunction(cframe, duration, ifCoin)
 			restorePhysics()
 		end
 		return handle
-		elseif settings["Mode"] == "Safe" then
-		-- Always stay underground. Never restore physics / collisions while farming.
+	elseif settings["Mode"] == "Safe" then
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 
-		local TUNNEL_OFFSET = -3 -- less deep so it stays closer to the surface
+		local TUNNEL_OFFSET = -6
 		local startPos = humanoidRootPart.Position
 		local targPos = cframe.Position
 
-		-- Use the lower of the two heights so we never clip above ground
-		local tunnelY = math.min(startPos.Y, targPos.Y) + TUNNEL_OFFSET
+		local tunnelY = math.min(startPosition.Y, targPos.Y) + TUNNEL_OFFSET
 
-		-- Keep character upright – just lock Y under the map
 		local wp1 = CFrame.new(startPos.X, tunnelY, startPos.Z)
 		local wp2 = CFrame.new(targPos.X, tunnelY, targPos.Z)
 
@@ -186,11 +172,10 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		local handle = {}
 
-		-- Keep velocity + PlatformStand locked continuously so it never falls
-		-- after a tween finishes.
 		task.spawn(function()
 			while not cancelled do
 				if humanoidRootPart and humanoidRootPart.Parent then
+					humanoidRootPart.Anchored = true
 					humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
 					humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 					humanoid.PlatformStand = true
@@ -204,36 +189,28 @@ local function teleportFunction(cframe, duration, ifCoin)
 		end)
 
 		task.spawn(function()
-			-- 1. Dive straight down (or stay if already underground)
 			if math.abs(startPos.Y - tunnelY) > 0.5 then
 				if not tweenTo(wp1, diveTime) then return end
 			else
 				humanoidRootPart.CFrame = wp1
 			end
 
-			-- 2. Horizontal tunnel to under the coin
 			if not tweenTo(wp2, horizTime) then return end
 
-			-- Snap exactly onto the tunnel point and hold
 			humanoidRootPart.CFrame = wp2
 			humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
 			humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 
-			-- 3. Stay underground – teleport the coin down to us (aura)
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
 
 			task.wait(settings["TweenDelay"])
-
-			-- Intentionally do NOT call restorePhysics() or re-enable CanCollide.
-			-- Stabilizer keeps running until Cancel is called.
 		end)
 
 		function handle:Cancel()
 			cancelled = true
 			if currentTween then currentTween:Cancel() end
-			-- On cancel we still stay underground / locked – do not restore physics
 			if coinCFrame then
 				humanoidRootPart.CFrame = CFrame.new(coinCFrame.Position.X, tunnelY, coinCFrame.Position.Z)
 			end
