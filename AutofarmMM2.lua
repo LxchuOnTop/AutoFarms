@@ -172,16 +172,12 @@ local function teleportFunction(cframe, duration, ifCoin)
 			restorePhysics()
 		end
 		return handle
-	elseif settings["Mode"] == "Safe" then
+		elseif settings["Mode"] == "Safe" then
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 
-		local startPos = humanoidRootPart.Position
-		local TUNNEL_OFFSET = -settings["SafeModeOffset"]
-		local tunnelY = startPosition.Y + TUNNEL_OFFSET
-		local targetPos = Vector3.new(startPos.X, tunnelY, startPos.Z)
 		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
-		local targetCFrame = CFrame.new(targetPos) * currentRot
+		local targetCFrame = CFrame.new(cframe.Position) * currentRot
 
 		safeHold.active = true
 		safeHold.targetCFrame = targetCFrame
@@ -189,12 +185,12 @@ local function teleportFunction(cframe, duration, ifCoin)
 		local handle = {}
 		local tween
 
-		local dy = math.abs(startPos.Y - tunnelY)
-		if dy > 0.05 then
+		local dist = (humanoidRootPart.Position - targetCFrame.Position).Magnitude
+		if dist > 0.05 then
 			safeHold.tweening = true
 			tween = tweenService:Create(
 				humanoidRootPart,
-				TweenInfo.new(0.12, Enum.EasingStyle.Linear),
+				TweenInfo.new(duration, Enum.EasingStyle.Linear),
 				{CFrame = targetCFrame}
 			)
 			tween.Completed:Connect(function()
@@ -209,23 +205,14 @@ local function teleportFunction(cframe, duration, ifCoin)
 		end
 
 		task.spawn(function()
-			if tween then
-				tween.Completed:Wait()
-			end
+			if tween then tween.Completed:Wait() end
 			if cancelled then return end
-
-			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
-				ifCoin.CFrame = humanoidRootPart.CFrame
-			end
-
 			task.wait(settings["TweenDelay"])
 		end)
 
 		function handle:Cancel()
 			cancelled = true
-			if tween then
-				tween:Cancel()
-			end
+			if tween then tween:Cancel() end
 			safeHold.targetCFrame = humanoidRootPart.CFrame
 			safeHold.tweening = false
 		end
@@ -321,6 +308,10 @@ local function startFarmingLoop()
 				local coin, distance = getNearestCoin()
 				if coin and coin.Parent then
 					if distance > 250 then
+						disablePhysics(true)
+						safeHold.active = true
+						safeHold.tweening = false
+						safeHold.targetCFrame = coin.CFrame
 						humanoidRootPart.CFrame = coin.CFrame
 					else
 						local handle = teleportFunction(
