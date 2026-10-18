@@ -73,6 +73,8 @@ local fullBag = false
 local alive = false
 local roundStarted = false
 local startPosition = humanoidRootPart.CFrame
+local coinBlacklist   = setmetatable({}, {__mode = "k"})
+local coinArrivalTime = setmetatable({}, {__mode = "k"})
 
 player.Idled:Connect(function()
 	virtualUser:CaptureController()
@@ -159,6 +161,16 @@ local function restorePhysics()
 end
 
 local function teleportFunction(cframe, duration, ifCoin)
+	if ifCoin then
+		if coinBlacklist[ifCoin] then return nil end
+		if coinArrivalTime[ifCoin] and (os.clock() - coinArrivalTime[ifCoin]) > 10 then
+			coinBlacklist[ifCoin] = true
+			coinArrivalTime[ifCoin] = nil
+			setStatus("STATUS: Coin Bugged! Blacklisting and selecting another...")
+			return nil
+		end
+	end
+
 	local cancelled = false
 	local currentTween = nil
 	local coinCFrame = ifCoin and ifCoin.Parent and ifCoin.CFrame or nil
@@ -179,10 +191,12 @@ local function teleportFunction(cframe, duration, ifCoin)
 		return not cancelled
 	end
 
-	if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild('TouchInterest')
-		and (humanoidRootPart.Position - ifCoin.Position).Magnitude < settings["CoinAuraDistance"] then
+	if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild('TouchInterest') and (humanoidRootPart.Position - ifCoin.Position).Magnitude < settings["CoinAuraDistance"] then
 		setStatus("STATUS: [COIN AURA]: Teleporting Coin to Player...")
 		ifCoin.CFrame = humanoidRootPart.CFrame
+		if coinArrivalTime[ifCoin] == nil then
+			coinArrivalTime[ifCoin] = os.clock()
+		end
 		return nil
 	end
 
@@ -196,6 +210,9 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		task.spawn(function()
 			if not tweenTo(cframe, duration) then return end
+			if ifCoin then
+				coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
+			end
 			task.wait(0.1)
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
@@ -264,11 +281,12 @@ local function teleportFunction(cframe, duration, ifCoin)
 		task.spawn(function()
 			if tween then tween.Completed:Wait() end
 			if cancelled then return end
-
+			if ifCoin then
+				coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
+			end
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
-
 			task.wait(settings["TweenDelay"])
 		end)
 
@@ -344,12 +362,15 @@ local function functionInnocentSheriffHeroMurderer()
 	end
 end
 
+local coinBlacklist = {}
+local coinAttemptStart = {}
+
 local function getNearestCoin()
 	local closestCoin, minDistance = nil, math.huge
 	for _, model in pairs(workspace:GetChildren()) do
 		if model:FindFirstChild("CoinContainer") then
 			for _, coin in pairs(model.CoinContainer:GetChildren()) do
-				if coin:GetAttribute("CoinID") == settings["CoinType"] and coin:FindFirstChild("TouchInterest") then
+				if coin:GetAttribute("CoinID") == settings["CoinType"] and coin:FindFirstChild("TouchInterest") and not coinBlacklist[coin] then
 					local distance = (humanoidRootPart.Position - coin.Position).Magnitude
 					if distance < minDistance then
 						closestCoin = coin
@@ -369,29 +390,46 @@ local function startFarmingLoop()
 				and character and humanoidRootPart and humanoidRootPart.Parent then
 				local coin, distance = getNearestCoin()
 				if coin and coin.Parent then
-					if distance > 250 then
-						disablePhysics(true)
-						local targetPos = Vector3.new(
-							coin.Position.X,
-							coin.Position.Y - settings["SafeModeOffset"],
-							coin.Position.Z
-						)
-						local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
-						if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-							currentRot = currentRot * CFrame.Angles(-math.pi / 2, 0, 0)
-							humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
-						end
-						safeHold.active = true
-						safeHold.tweening = false
-						safeHold.targetCFrame = CFrame.new(targetPos) * currentRot
-						humanoidRootPart.CFrame = safeHold.targetCFrame
-						local targetCoin = coin
-						task.spawn(function()
-							task.wait(0.1)
-							if targetCoin and targetCoin.Parent and targetCoin:FindFirstChild("TouchInterest") then
-								targetCoin.CFrame = humanoidRootPart.CFrame
+					if not coinAttemptStart[coin] then
+						coinAttemptStart[coin] = os.clock()
+					end
+
+					if (os.clock() - coinAttemptStart[coin]) > 10 then
+						coinBlacklist[coin] = true
+						coinAttemptStart[coin] = nil
+						setStatus("STATUS: Coin stuck for 10s! Blacklisting and selecting another...")
+					elseif distance > 250 then
+						if coinArrivalTime[coin] and (os.clock() - coinArrivalTime[coin]) > 10 then
+							coinBlacklist[coin] = true
+							coinArrivalTime[coin] = nil
+							setStatus("STATUS: Coin stuck for 10s! Blacklisting...")
+						else
+							disablePhysics(true)
+							local targetPos = Vector3.new(
+								coin.Position.X,
+								coin.Position.Y - settings["SafeModeOffset"],
+								coin.Position.Z
+							)
+							local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
+							if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
+								currentRot = currentRot * CFrame.Angles(-math.pi / 2, 0, 0)
+								humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 							end
-						end)
+							safeHold.active = true
+							safeHold.tweening = false
+							safeHold.targetCFrame = CFrame.new(targetPos) * currentRot
+							humanoidRootPart.CFrame = safeHold.targetCFrame
+
+							coinArrivalTime[coin] = coinArrivalTime[coin] or os.clock()
+
+							local targetCoin = coin
+							task.spawn(function()
+								task.wait(0.1)
+								if targetCoin and targetCoin.Parent and targetCoin:FindFirstChild("TouchInterest") then
+									targetCoin.CFrame = humanoidRootPart.CFrame
+								end
+							end)
+						end
 					else
 						local handle = teleportFunction(
 							coin.CFrame,
@@ -403,11 +441,15 @@ local function startFarmingLoop()
 						while farming
 							and coin.Parent
 							and coin:FindFirstChild("TouchInterest")
-							and (os.clock() - t0) < maxWait do
+							and (os.clock() - t0) < maxWait
+							and not coinBlacklist[coin] do
 							task.wait(0.05)
 						end
 						if handle and handle.Cancel then
 							handle:Cancel()
+						end
+						if not (coin.Parent and coin:FindFirstChild("TouchInterest")) then
+							coinAttemptStart[coin] = nil
 						end
 					end
 				end
@@ -516,6 +558,8 @@ end)
 
 roundEndFade.OnClientEvent:Connect(function()
 	detect()
+	coinBlacklist   = setmetatable({}, {__mode = "k"})
+	coinArrivalTime = setmetatable({}, {__mode = "k"})
 	if roundStarted then
 		setStatus("STATUS: Waiting for round to start.")
 		roundCoins = 0
