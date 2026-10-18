@@ -21,6 +21,7 @@ local upperTorso = character:WaitForChild('UpperTorso')
 local humanoid = character:WaitForChild('Humanoid')
 
 local replicatedStorage = game:GetService("ReplicatedStorage")
+local runService = game:GetService('RunService')
 local tweenService = game:GetService("TweenService")
 local virtualUser = game:GetService("VirtualUser")
 local userInputService = game:GetService("UserInputService")
@@ -64,18 +65,21 @@ local function setStatus(txt)
 	end)
 end
 
-local activeHold = nil
+local safeHold = {
+	active = false,
+	tweening = false,
+	targetCFrame = nil,
+}
 
-local function clearActiveHold()
-	if activeHold then
-		pcall(function()
-			if activeHold.pos then activeHold.pos:Destroy() end
-			if activeHold.ori then activeHold.ori:Destroy() end
-			if activeHold.attach then activeHold.attach:Destroy() end
-		end)
-		activeHold = nil
+runService.Stepped:Connect(function()
+	if not safeHold.active then return end
+	if not humanoidRootPart or not humanoidRootPart.Parent then return end
+	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+	if not safeHold.tweening and safeHold.targetCFrame then
+		humanoidRootPart.CFrame = safeHold.targetCFrame
 	end
-end
+end)
 
 local function disablePhysics(stopAnims)
 	upperTorso.CanCollide = false
@@ -135,6 +139,9 @@ local function teleportFunction(cframe, duration, ifCoin)
 	end
 
 	if settings["Mode"] == "Standing" then
+		safeHold.active = false
+		safeHold.tweening = false
+		safeHold.targetCFrame = nil
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 		local handle = {}
@@ -166,7 +173,6 @@ local function teleportFunction(cframe, duration, ifCoin)
 		end
 		return handle
 	elseif settings["Mode"] == "Safe" then
-		clearActiveHold()
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 
@@ -177,49 +183,36 @@ local function teleportFunction(cframe, duration, ifCoin)
 		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
 		local targetCFrame = CFrame.new(targetPos) * currentRot
 
-		local attach = Instance.new("Attachment")
-		attach.Parent = humanoidRootPart
-
-		local alignPos = Instance.new("AlignPosition")
-		alignPos.Attachment0 = attach
-		alignPos.Mode = Enum.PositionAlignmentMode.OneAttachment
-		alignPos.Position = humanoidRootPart.Position
-		alignPos.RigidityEnabled = true
-		alignPos.MaxForce = math.huge
-		alignPos.Responsiveness = 200
-		alignPos.Parent = humanoidRootPart
-
-		local alignOri = Instance.new("AlignOrientation")
-		alignOri.Attachment0 = attach
-		alignOri.Mode = Enum.OrientationAlignmentMode.OneAttachment
-		alignOri.CFrame = humanoidRootPart.CFrame
-		alignOri.RigidityEnabled = true
-		alignOri.MaxTorque = math.huge
-		alignOri.Responsiveness = 200
-		alignOri.Parent = humanoidRootPart
-
-		activeHold = {pos = alignPos, ori = alignOri, attach = attach}
+		safeHold.active = true
+		safeHold.targetCFrame = targetCFrame
 
 		local handle = {}
-		local posTween, oriTween
+		local tween
 
-		if math.abs(startPos.Y - tunnelY) > 0.05 then
-			local tweenInfo = TweenInfo.new(0.12, Enum.EasingStyle.Linear)
-			posTween = tweenService:Create(alignPos, tweenInfo, {Position = targetPos})
-			oriTween = tweenService:Create(alignOri, tweenInfo, {CFrame = targetCFrame})
-			posTween:Play()
-			oriTween:Play()
+		local dy = math.abs(startPos.Y - tunnelY)
+		if dy > 0.05 then
+			safeHold.tweening = true
+			tween = tweenService:Create(
+				humanoidRootPart,
+				TweenInfo.new(0.12, Enum.EasingStyle.Linear),
+				{CFrame = targetCFrame}
+			)
+			tween.Completed:Connect(function()
+				if not cancelled then
+					safeHold.tweening = false
+				end
+			end)
+			tween:Play()
 		else
-			alignPos.Position = targetPos
-			alignOri.CFrame = targetCFrame
+			safeHold.tweening = false
+			humanoidRootPart.CFrame = targetCFrame
 		end
 
 		task.spawn(function()
-			if posTween then posTween.Completed:Wait() end
+			if tween then
+				tween.Completed:Wait()
+			end
 			if cancelled then return end
-
-			humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-			humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
@@ -230,8 +223,11 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		function handle:Cancel()
 			cancelled = true
-			if posTween then posTween:Cancel() end
-			if oriTween then oriTween:Cancel() end
+			if tween then
+				tween:Cancel()
+			end
+			safeHold.targetCFrame = humanoidRootPart.CFrame
+			safeHold.tweening = false
 		end
 		return handle
 	end
@@ -383,7 +379,7 @@ if character and humanoid then
 end
 
 local function detect()
-	if settings["FullyOptimizeWhileGrinding"] == true then
+	--[[if settings["FullyOptimizeWhileGrinding"] == true then
 		for _, descendant in ipairs(workspace:GetDescendants()) do
 			if (descendant:IsA("BasePart") or descendant:IsA("MeshPart")) and not players:GetPlayerFromCharacter(descendant:FindFirstAncestorOfClass("Model")) then
 				descendant.Transparency = 1
@@ -400,7 +396,7 @@ local function detect()
 				descendant.Transparency = 0
 			end
 		end
-	end
+	end]]
 end
 
 coinCollected.OnClientEvent:Connect(function(coinType, current, max)
