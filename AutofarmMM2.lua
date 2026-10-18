@@ -63,257 +63,160 @@ local function setStatus(txt)
 	end)
 end
 
-local movementActive = false
-local movementToken = 0
-local savedPhysics = nil
-local sleepTrack = nil
-local sleepAnimation = Instance.new("Animation")
-sleepAnimation.AnimationId = "rbxassetid://180435571"
-
 local function disablePhysics(stopAnims)
-	if not character or not humanoidRootPart or not humanoid then return end
-
-	if not savedPhysics then
-		savedPhysics = {
-			Anchored = humanoidRootPart.Anchored,
-			PlatformStand = humanoid.PlatformStand,
-			AutoRotate = humanoid.AutoRotate,
-			UpperCanCollide = upperTorso.CanCollide,
-			LowerCanCollide = lowerTorso.CanCollide,
-			RootCanCollide = humanoidRootPart.CanCollide
-		}
-	end
-
-	movementActive = true
-
 	upperTorso.CanCollide = false
 	lowerTorso.CanCollide = false
 	humanoidRootPart.CanCollide = false
-
+	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+	humanoid.PlatformStand = true
 	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-
-	humanoid.AutoRotate = false
-	humanoid.PlatformStand = false
-	humanoidRootPart.Anchored = true
-
 	if stopAnims then
 		local animator = humanoid:FindFirstChildOfClass("Animator")
-
 		if animator then
 			for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-				track:Stop(0)
+				track:Stop()
 			end
-
-			local success, track = pcall(function()
-				return animator:LoadAnimation(sleepAnimation)
-			end)
-
-			if success and track then
-				sleepTrack = track
-				sleepTrack.Looped = true
-				sleepTrack.Priority = Enum.AnimationPriority.Action
-				sleepTrack:Play(0)
-			end
+			animator.Parent = nil
 		end
 	end
 end
 
 local function restorePhysics()
-	if not humanoidRootPart or not humanoid or not savedPhysics then
-		movementActive = false
-		return
-	end
-
-	local oldPhysics = savedPhysics
-	savedPhysics = nil
-	movementActive = false
-
-	if sleepTrack then
-		sleepTrack:Stop(0)
-		sleepTrack:Destroy()
-		sleepTrack = nil
-	end
-
+	upperTorso.CanCollide = true
+	lowerTorso.CanCollide = true
+	humanoidRootPart.CanCollide = true
+	humanoid.PlatformStand = false
+	humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-
-	humanoidRootPart.Anchored = oldPhysics.Anchored
-	humanoidRootPart.CanCollide = oldPhysics.RootCanCollide
-	upperTorso.CanCollide = oldPhysics.UpperCanCollide
-	lowerTorso.CanCollide = oldPhysics.LowerCanCollide
-
-	humanoid.PlatformStand = oldPhysics.PlatformStand
-	humanoid.AutoRotate = oldPhysics.AutoRotate
-
-	if not oldPhysics.Anchored then
-		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-	end
 end
 
 local function teleportFunction(cframe, duration, ifCoin)
-	movementToken += 1
-
-	local myToken = movementToken
 	local cancelled = false
 	local currentTween = nil
-	local handle = {}
+	local coinCFrame = ifCoin and ifCoin.Parent and ifCoin.CFrame or nil
 
-	local function isValid()
-		return not cancelled
-			and movementToken == myToken
-			and character
-			and character.Parent
-			and humanoidRootPart
-			and humanoidRootPart.Parent
-			and humanoid
-			and humanoid.Health > 0
+	local function lockVelocity()
+		task.spawn(function()
+			while not cancelled do
+				local tw = currentTween
+				if not tw or tw.PlaybackState ~= Enum.PlaybackState.Playing then break end
+				humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+				humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+				task.wait(0.05)
+			end
+		end)
 	end
 
 	local function tweenTo(targetCFrame, dur)
-		if not isValid() then return false end
-
-		if currentTween then
-			currentTween:Cancel()
-			currentTween = nil
-		end
-
+		if cancelled then return false end
 		if dur <= 0 then
 			humanoidRootPart.CFrame = targetCFrame
-			return isValid()
+			return not cancelled
 		end
-
-		local tween = tweenService:Create(
+		currentTween = tweenService:Create(
 			humanoidRootPart,
-			TweenInfo.new(
-				dur,
-				Enum.EasingStyle.Linear,
-				Enum.EasingDirection.InOut
-			),
+			TweenInfo.new(dur, Enum.EasingStyle.Linear),
 			{CFrame = targetCFrame}
 		)
-
-		currentTween = tween
-		tween:Play()
-
-		local playbackState = tween.Completed:Wait()
-
-		if currentTween == tween then
-			currentTween = nil
-		end
-
-		return isValid()
-			and playbackState == Enum.PlaybackState.Completed
+		currentTween:Play()
+		lockVelocity()
+		currentTween.Completed:Wait()
+		return not cancelled
 	end
 
-	function handle:Cancel()
-		if cancelled then return end
-
-		cancelled = true
-
-		if currentTween then
-			currentTween:Cancel()
-			currentTween = nil
-		end
-
-		if movementToken == myToken then
-			restorePhysics()
-		end
-	end
-
-	if not cframe or not humanoidRootPart.Parent then
-		return handle
-	end
-
-	if ifCoin and ifCoin.Parent
-		and ifCoin:FindFirstChild("TouchInterest")
-		and (humanoidRootPart.Position - ifCoin.Position).Magnitude
-			<= settings["CoinAuraDistance"] then
-
-		setStatus("STATUS: [COIN AURA]: Moving Coin to Player...")
-
+	if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild('TouchInterest')
+		and (humanoidRootPart.Position - ifCoin.Position).Magnitude < settings["CoinAuraDistance"] then
+		setStatus("STATUS: [COIN AURA]: Teleporting Coin to Player...")
 		ifCoin.CFrame = humanoidRootPart.CFrame
-
-		return handle
+		return nil
 	end
 
-	disablePhysics(true)
-	setStatus("STATUS: Going for another coin.")
+	if settings["Mode"] == "Standing" then
+		disablePhysics(true)
+		setStatus("STATUS: Going for another coin.")
+		local handle = {}
 
-	task.spawn(function()
-		local success = false
-
-		local ok = pcall(function()
-			if settings["Mode"] == "Standing" then
-				success = tweenTo(cframe, duration)
-
-			elseif settings["Mode"] == "Safe" then
-				local OFFSET = -5
-				local startPos = humanoidRootPart.Position
-				local targetPos = cframe.Position
-
-				local tunnelY = math.min(startPos.Y, targetPos.Y) + OFFSET
-
-				local wp1 = CFrame.new(
-					startPos.X,
-					tunnelY,
-					startPos.Z
-				)
-
-				local wp2 = CFrame.new(
-					targetPos.X,
-					tunnelY,
-					targetPos.Z
-				)
-
-				local horizontalDistance = (
-					Vector2.new(startPos.X, startPos.Z)
-					- Vector2.new(targetPos.X, targetPos.Z)
-				).Magnitude
-
-				local diveTime = 0.15
-				local horizontalTime = math.max(
-					horizontalDistance / math.max(settings["AutofarmSpeed"], 1),
-					0.05
-				)
-
-				success = tweenTo(wp1, diveTime)
-
-				if success then
-					success = tweenTo(wp2, horizontalTime)
-				end
-
-				if success and isValid() then
-					local finalPosition = Vector3.new(
-						targetPos.X,
-						targetPos.Y - 3,
-						targetPos.Z
-					)
-
-					humanoidRootPart.CFrame = CFrame.new(finalPosition) * cframe.Rotation
-				end
-			end
-
-			if success and isValid() and ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
-				setStatus("STATUS: Moving Coin to Player...")
+		task.spawn(function()
+			if not tweenTo(cframe, duration) then return end
+			task.wait(0.1)
+			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
-
-			if success and isValid() then
-				task.wait(settings["TweenDelay"])
+			task.wait(settings["TweenDelay"])
+			if not cancelled then
+				local animator = humanoid:FindFirstChildOfClass("Animator")
+				if not animator then
+					local newAnim = Instance.new("Animator")
+					newAnim.Parent = humanoid
+				end
+				restorePhysics()
 			end
 		end)
 
-		if movementToken == myToken then
-			if not ok then
-				warn("Autofarm movement error")
+		function handle:Cancel()
+			cancelled = true
+			if currentTween then currentTween:Cancel() end
+			if coinCFrame then
+				humanoidRootPart.CFrame = coinCFrame + Vector3.new(0, 3, 0)
 			end
-
 			restorePhysics()
 		end
-	end)
+		return handle
+	elseif settings["Mode"] == "Safe" then
+		-- Always stay underground. Never restore physics / collisions while farming.
+		disablePhysics(true)
+		setStatus("STATUS: Going for another coin.")
 
-	return handle
+		local TUNNEL_OFFSET = -8 -- how far under the lowest point we travel
+		local startPos = humanoidRootPart.Position
+		local targPos = cframe.Position
+
+		-- Use the lower of the two heights so we never clip above ground
+		local tunnelY = math.min(startPos.Y, targPos.Y) + TUNNEL_OFFSET
+
+		-- Keep character upright – just lock Y under the map
+		local wp1 = CFrame.new(startPos.X, tunnelY, startPos.Z)
+		local wp2 = CFrame.new(targPos.X, tunnelY, targPos.Z)
+
+		local diveTime = 0.12
+		local horizDist = (Vector2.new(startPos.X, startPos.Z) - Vector2.new(targPos.X, targPos.Z)).Magnitude
+		local horizTime = math.max(horizDist / settings["AutofarmSpeed"], 0.05)
+
+		local handle = {}
+		task.spawn(function()
+			-- 1. Dive straight down (or stay if already underground)
+			if math.abs(startPos.Y - tunnelY) > 0.5 then
+				if not tweenTo(wp1, diveTime) then return end
+			else
+				humanoidRootPart.CFrame = wp1
+			end
+
+			-- 2. Horizontal tunnel to under the coin
+			if not tweenTo(wp2, horizTime) then return end
+
+			-- 3. Stay underground – teleport the coin down to us (aura)
+			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
+				ifCoin.CFrame = humanoidRootPart.CFrame
+			end
+
+			task.wait(settings["TweenDelay"])
+
+			-- Intentionally do NOT call restorePhysics() or re-enable CanCollide.
+			-- Keeping the stabilizer prevents the glitch.
+		end)
+
+		function handle:Cancel()
+			cancelled = true
+			if currentTween then currentTween:Cancel() end
+			-- On cancel we still stay underground / locked – do not restore physics
+			if coinCFrame then
+				humanoidRootPart.CFrame = CFrame.new(coinCFrame.Position.X, tunnelY, coinCFrame.Position.Z)
+			end
+		end
+		return handle
+	end
 end
 
 local function functionInnocentSheriffHeroMurderer()
@@ -403,27 +306,25 @@ local function startFarmingLoop()
 				and character and humanoidRootPart and humanoidRootPart.Parent then
 				local coin, distance = getNearestCoin()
 				if coin and coin.Parent then
-					local handle = teleportFunction(
-						coin.CFrame,
-						distance / math.max(settings["AutofarmSpeed"], 1),
-						coin
-					)
-
-					local t0 = os.clock()
-					local maxWait = (distance / math.max(settings["AutofarmSpeed"], 1)) + 4
-
-					while farming
-						and not fullBag
-						and roundStarted
-						and alive
-						and coin.Parent
-						and coin:FindFirstChild("TouchInterest")
-						and (os.clock() - t0) < maxWait do
-						task.wait(0.05)
-					end
-
-					if handle and handle.Cancel then
-						handle:Cancel()
+					if distance > 250 then
+						humanoidRootPart.CFrame = coin.CFrame
+					else
+						local handle = teleportFunction(
+							coin.CFrame,
+							distance / settings["AutofarmSpeed"],
+							coin
+						)
+						local t0 = os.clock()
+						local maxWait = (distance / settings["AutofarmSpeed"]) + 4
+						while farming
+							and coin.Parent
+							and coin:FindFirstChild("TouchInterest")
+							and (os.clock() - t0) < maxWait do
+							task.wait(0.05)
+						end
+						if handle and handle.Cancel then
+							handle:Cancel()
+						end
 					end
 				end
 			end
@@ -464,7 +365,7 @@ if character and humanoid then
 end
 
 local function detect()
-	--[[if settings["FullyOptimizeWhileGrinding"] == true then
+	if settings["FullyOptimizeWhileGrinding"] == true then
 		for _, descendant in ipairs(workspace:GetDescendants()) do
 			if (descendant:IsA("BasePart") or descendant:IsA("MeshPart")) and not players:GetPlayerFromCharacter(descendant:FindFirstAncestorOfClass("Model")) then
 				descendant.Transparency = 1
@@ -481,7 +382,7 @@ local function detect()
 				descendant.Transparency = 0
 			end
 		end
-	end]]
+	end
 end
 
 coinCollected.OnClientEvent:Connect(function(coinType, current, max)
@@ -565,7 +466,7 @@ if settings["UI"] == true then
 		Interface.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 		Interface.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Interface.BorderSizePixel = 0
-		Interface.Position = UDim2.new(0.5, 0, 0.5, 0)
+		Interface.Position = UDim2.new(0.5, 0, 1, 0)
 		Interface.Size = UDim2.new(1, 0, 1, 0)
 
 		Title.Name = "Title"
