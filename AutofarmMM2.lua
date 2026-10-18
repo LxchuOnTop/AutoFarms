@@ -66,6 +66,9 @@ end
 local movementActive = false
 local movementToken = 0
 local savedPhysics = nil
+local sleepTrack = nil
+local sleepAnimation = Instance.new("Animation")
+sleepAnimation.AnimationId = "rbxassetid://180435571"
 
 local function disablePhysics(stopAnims)
 	if not character or not humanoidRootPart or not humanoid then return end
@@ -91,14 +94,26 @@ local function disablePhysics(stopAnims)
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 
 	humanoid.AutoRotate = false
-	humanoid.PlatformStand = true
+	humanoid.PlatformStand = false
 	humanoidRootPart.Anchored = true
 
 	if stopAnims then
 		local animator = humanoid:FindFirstChildOfClass("Animator")
+
 		if animator then
 			for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
 				track:Stop(0)
+			end
+
+			local success, track = pcall(function()
+				return animator:LoadAnimation(sleepAnimation)
+			end)
+
+			if success and track then
+				sleepTrack = track
+				sleepTrack.Looped = true
+				sleepTrack.Priority = Enum.AnimationPriority.Action
+				sleepTrack:Play(0)
 			end
 		end
 	end
@@ -113,6 +128,12 @@ local function restorePhysics()
 	local oldPhysics = savedPhysics
 	savedPhysics = nil
 	movementActive = false
+
+	if sleepTrack then
+		sleepTrack:Stop(0)
+		sleepTrack:Destroy()
+		sleepTrack = nil
+	end
 
 	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
@@ -262,22 +283,19 @@ local function teleportFunction(cframe, duration, ifCoin)
 					success = tweenTo(wp2, horizontalTime)
 				end
 
-				if success and isValid() then<
+				if success and isValid() then
 					local finalPosition = Vector3.new(
 						targetPos.X,
 						targetPos.Y - 3,
 						targetPos.Z
 					)
 
-					humanoidRootPart.CFrame =
-						CFrame.new(finalPosition) * cframe.Rotation
+					humanoidRootPart.CFrame = CFrame.new(finalPosition) * cframe.Rotation
 				end
 			end
 
 			if success and isValid() and ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
-
 				setStatus("STATUS: Moving Coin to Player...")
-
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
 
