@@ -47,6 +47,12 @@ local function OdhSkid(TargetPlayer, duration)
 			return
 		end
 
+		for _, part in ipairs(TCharacter:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = true
+			end
+		end
+
 		local FPos = function(BasePart, Pos, Ang)
 			RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
 			Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
