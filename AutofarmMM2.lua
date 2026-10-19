@@ -1,3 +1,5 @@
+-- Scripted by TokyoMemoriess
+
 local settings = {
 	["Mode"] = "Safe",
 	["AutofarmSpeed"] = 27.5,
@@ -687,7 +689,7 @@ if settings["UI"] == true then
 		Title.Position = UDim2.new(0.5, 0, 0.0500000007, 0)
 		Title.Size = UDim2.new(1, 0, 0, 50)
 		Title.Font = Enum.Font.SourceSansBold
-		Title.Text = "AUTOFARM SCRIPTED BY ! Lxchu [MODIFY SETTINGS IN SCRIPT]"
+		Title.Text = "AUTOFARM Scripted by TokyoMemoriess [MODIFY SETTINGS IN SCRIPT]"
 		Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 		Title.TextScaled = true
 		Title.TextSize = 14.000
