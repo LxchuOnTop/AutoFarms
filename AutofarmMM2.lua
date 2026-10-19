@@ -1256,27 +1256,27 @@ if settings["UI"] == true then
 		end)
 
 		UI.Active = true
+		Tab01.Active = true
 
 		local odhDragging = false
 		local odhDragStart = nil
 		local odhStartPos = nil
 
-		UI.InputBegan:Connect(function(input)
+		local function odhBeginDrag(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				odhDragging = true
 				odhDragStart = input.Position
 				odhStartPos = UI.Position
-
-				input.Changed:Connect(function()
-					if input.UserInputState == Enum.UserInputState.End then
-						odhDragging = false
-					end
-				end)
 			end
-		end)
+		end
+
+		UI.InputBegan:Connect(odhBeginDrag)
+		Tab01.InputBegan:Connect(odhBeginDrag)
+		Title.InputBegan:Connect(odhBeginDrag)
 
 		userInputService.InputChanged:Connect(function(input)
-			if odhDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			if not odhDragging then return end
+			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				local delta = input.Position - odhDragStart
 				UI.Position = UDim2.new(
 					odhStartPos.X.Scale,
@@ -1284,6 +1284,12 @@ if settings["UI"] == true then
 					odhStartPos.Y.Scale,
 					odhStartPos.Y.Offset + delta.Y
 				)
+			end
+		end)
+
+		userInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				odhDragging = false
 			end
 		end)
 	end
