@@ -1,3 +1,4 @@
+-- fling
 local player = game:GetService("Players").LocalPlayer
 flingActive = false
 
