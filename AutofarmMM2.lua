@@ -382,54 +382,42 @@ local function functionInnocentSheriffHeroMurderer()
 end
 
 local function returnToStartPosition()
-	if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+    if not (humanoidRootPart and humanoidRootPart.Parent) then return end
 
-	if currentFarmHandle and currentFarmHandle.Cancel then
-		currentFarmHandle:Cancel()
-		currentFarmHandle = nil
-	end
+    if currentFarmHandle and currentFarmHandle.Cancel then
+        currentFarmHandle:Cancel()
+        currentFarmHandle = nil
+    end
 
-	safeHold.active = false
-	safeHold.tweening = false
-	safeHold.targetCFrame = nil
+    safeHold.active = false
+    safeHold.tweening = false
+    safeHold.targetCFrame = nil
 
-	task.wait(0.25)
-	if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+    task.wait(0.25)
+    if not (humanoidRootPart and humanoidRootPart.Parent) then return end
 
-	local dist = (humanoidRootPart.Position - startPosition.Position).Magnitude
-	if dist > 0.05 then
-		local duration = math.min(dist / settings["AutofarmSpeed"], 3)
-		local tween = tweenService:Create(
-			humanoidRootPart,
-			TweenInfo.new(duration, Enum.EasingStyle.Linear),
-			{CFrame = startPosition}
-		)
-		tween:Play()
-		tween.Completed:Wait()
-	end
-	if not (humanoidRootPart and humanoidRootPart.Parent) then return end
-	humanoidRootPart.CFrame = startPosition
+    local dist = (humanoidRootPart.Position - startPosition.Position).Magnitude
+    if dist > 0.05 then
+        local duration = math.min(dist / settings["AutofarmSpeed"], 3)
+        local tween = tweenService:Create(
+            humanoidRootPart,
+            TweenInfo.new(duration, Enum.EasingStyle.Linear),
+            {CFrame = startPosition}
+        )
+        tween:Play()
+        tween.Completed:Wait()
+    end
+    if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+    humanoidRootPart.CFrame = startPosition
 
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if not animator then
-		animator = Instance.new("Animator")
-		animator.Parent = humanoid
-	end
+    if not humanoid:FindFirstChildOfClass("Animator") then
+        local animator = Instance.new("Animator")
+        animator.Parent = humanoid
+    end
 
-	restorePhysics()
+    restorePhysics()
 
-	if savedAnimations then
-		for _, data in ipairs(savedAnimations) do
-			local anim = Instance.new("Animation")
-			anim.AnimationId = data.id
-			local track = animator:LoadAnimation(anim)
-			track.Looped = data.looped
-			track:Play(0, data.weight, data.speed)
-			track.TimePosition = data.time
-			anim:Destroy()
-		end
-		savedAnimations = nil
-	end
+    savedAnimations = nil
 end
 
 local coinBlacklist = {}
@@ -1254,43 +1242,8 @@ if settings["UI"] == true then
 				tweenService:Create(OPTIMIZE.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(170, 0, 0)}):Play()
 			end
 		end)
-
+		UI.Draggable = true
 		UI.Active = true
-		Tab01.Active = true
-
-		local odhDragging = false
-		local odhDragStart = nil
-		local odhStartPos = nil
-
-		local function odhBeginDrag(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				odhDragging = true
-				odhDragStart = input.Position
-				odhStartPos = UI.Position
-			end
-		end
-
-		UI.InputBegan:Connect(odhBeginDrag)
-		Tab01.InputBegan:Connect(odhBeginDrag)
-		Title.InputBegan:Connect(odhBeginDrag)
-
-		userInputService.InputChanged:Connect(function(input)
-			if not odhDragging then return end
-			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-				local delta = input.Position - odhDragStart
-				UI.Position = UDim2.new(
-					odhStartPos.X.Scale,
-					odhStartPos.X.Offset + delta.X,
-					odhStartPos.Y.Scale,
-					odhStartPos.Y.Offset + delta.Y
-				)
-			end
-		end)
-
-		userInputService.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				odhDragging = false
-			end
-		end)
+		UI.Selectable = true
 	end
 end
