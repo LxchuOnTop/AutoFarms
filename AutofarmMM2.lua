@@ -1254,8 +1254,37 @@ if settings["UI"] == true then
 				tweenService:Create(OPTIMIZE.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(170, 0, 0)}):Play()
 			end
 		end)
-		UI.Draggable = true
+
 		UI.Active = true
-		UI.Selectable = true
+
+		local odhDragging = false
+		local odhDragStart = nil
+		local odhStartPos = nil
+
+		UI.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				odhDragging = true
+				odhDragStart = input.Position
+				odhStartPos = UI.Position
+
+				input.Changed:Connect(function()
+					if input.UserInputState == Enum.UserInputState.End then
+						odhDragging = false
+					end
+				end)
+			end
+		end)
+
+		userInputService.InputChanged:Connect(function(input)
+			if odhDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				local delta = input.Position - odhDragStart
+				UI.Position = UDim2.new(
+					odhStartPos.X.Scale,
+					odhStartPos.X.Offset + delta.X,
+					odhStartPos.Y.Scale,
+					odhStartPos.Y.Offset + delta.Y
+				)
+			end
+		end)
 	end
 end
