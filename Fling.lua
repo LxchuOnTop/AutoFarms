@@ -1,4 +1,4 @@
--- fling
+-- fling by TokyoMemoriess
 local player = game:GetService("Players").LocalPlayer
 flingActive = false
 
