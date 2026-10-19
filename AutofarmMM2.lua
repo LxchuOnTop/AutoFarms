@@ -1466,7 +1466,78 @@ if settings["UI"] == true then
 				tweenService:Create(OPTIMIZE.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(170, 0, 0)}):Play()
 			end
 		end)
-				UI.Active = true
+
+		local CLOSE = Instance.new("TextButton")
+		CLOSE.Name = "CLOSE"
+		CLOSE.Parent = Tab01
+		CLOSE.AnchorPoint = Vector2.new(0.5, 0.5)
+		CLOSE.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		CLOSE.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		CLOSE.BorderSizePixel = 0
+		CLOSE.Position = UDim2.new(0.36, 0, 0.075, 0)
+		CLOSE.Size = UDim2.new(0, 25, 0, 25)
+		CLOSE.AutoButtonColor = false
+		CLOSE.Font = Enum.Font.SourceSansBold
+		CLOSE.Text = "X"
+		CLOSE.TextColor3 = Color3.fromRGB(255, 255, 255)
+		CLOSE.TextScaled = true
+		CLOSE.TextSize = 14.000
+		CLOSE.TextStrokeTransparency = 0.900
+		
+		local UICorner_Close = Instance.new("UICorner")
+		UICorner_Close.CornerRadius = UDim.new(0, 10)
+		UICorner_Close.Parent = CLOSE
+		
+		local uStroke_Close = Instance.new('UIStroke', CLOSE)
+		uStroke_Close.Thickness = 1.5
+		uStroke_Close.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		uStroke_Close.Color = Color3.fromRGB(170, 0, 0)
+
+		local TOGGLE = Instance.new("TextButton")
+		TOGGLE.Name = "TOGGLE"
+		TOGGLE.Parent = Lxchu
+		TOGGLE.AnchorPoint = Vector2.new(0.5, 0.5)
+		TOGGLE.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		TOGGLE.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		TOGGLE.BorderSizePixel = 0
+		TOGGLE.Position = UDim2.new(0.85, 0, 0.8, 0)
+		TOGGLE.Size = UDim2.new(0, 50, 0, 50)
+		TOGGLE.AutoButtonColor = false
+		TOGGLE.Font = Enum.Font.SourceSansBold
+		TOGGLE.Text = "OPEN"
+		TOGGLE.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TOGGLE.TextScaled = true
+		TOGGLE.TextSize = 14.000
+		TOGGLE.TextStrokeTransparency = 0.900
+		TOGGLE.Visible = false
+		
+		local UICorner_Toggle = Instance.new("UICorner")
+		UICorner_Toggle.CornerRadius = UDim.new(0, 10)
+		UICorner_Toggle.Parent = TOGGLE
+
+		CLOSE.MouseEnter:Connect(function()
+			tweenService:Create(CLOSE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+		end)
+		CLOSE.MouseLeave:Connect(function()
+			tweenService:Create(CLOSE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+		end)
+		CLOSE.MouseButton1Click:Connect(function()
+			UI.Visible = false
+			TOGGLE.Visible = true
+		end)
+
+		TOGGLE.MouseEnter:Connect(function()
+			tweenService:Create(TOGGLE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+		end)
+		TOGGLE.MouseLeave:Connect(function()
+			tweenService:Create(TOGGLE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+		end)
+		TOGGLE.MouseButton1Click:Connect(function()
+			UI.Visible = true
+			TOGGLE.Visible = false
+		end)
+
+		UI.Active = true
 		Tab01.Active = true
 
 		local odhDragging = false
