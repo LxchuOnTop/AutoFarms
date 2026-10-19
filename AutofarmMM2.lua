@@ -23,7 +23,6 @@ local function setCharacterCollision(character)
 			part.CanCollide = false
 		end
 	end
-
 	character.DescendantAdded:Connect(function(part)
 		if part:IsA("BasePart") then
 			part.CanCollide = false
@@ -36,7 +35,6 @@ local function onPlayerAdded(player)
 		player.CharacterAdded:Connect(function(character)
 			setCharacterCollision(character)
 		end)
-
 		if player.Character then
 			setCharacterCollision(player.Character)
 		end
@@ -77,9 +75,70 @@ local roundStarted = false
 local startPosition = humanoidRootPart.CFrame
 local currentFarmHandle = nil
 local savedAnimations = nil
+local flingActive = false
+
 local coinBlacklist   = setmetatable({}, {__mode = "k"})
 local coinArrivalTime = setmetatable({}, {__mode = "k"})
-local flingActive = false
+local coinAttemptStart = setmetatable({}, {__mode = "k"})
+
+local cachedStatusLabel = nil
+local cachedTotalCoinLabel = nil
+
+local function getStatusLabel()
+	if cachedStatusLabel and cachedStatusLabel.Parent then
+		return cachedStatusLabel
+	end
+	cachedStatusLabel = nil
+	local root = player.PlayerGui
+	if settings["UIMode"] == 1 then
+		root = root:FindFirstChild('UI')
+		if root then root = root:FindFirstChild('Interface') end
+	else
+		root = root:FindFirstChild('Lxchu')
+		if root then root = root:FindFirstChild('UI') end
+		if root then root = root:FindFirstChild('Tab01') end
+	end
+	if root then
+		cachedStatusLabel = root:FindFirstChild('STATUS')
+	end
+	return cachedStatusLabel
+end
+
+local function getTotalCoinLabel()
+	if cachedTotalCoinLabel and cachedTotalCoinLabel.Parent then
+		return cachedTotalCoinLabel
+	end
+	cachedTotalCoinLabel = nil
+	local ui = player.PlayerGui:FindFirstChild('UI')
+	if ui then
+		local iface = ui:FindFirstChild('Interface')
+		if iface then
+			cachedTotalCoinLabel = iface:FindFirstChild('TOTALCOIN')
+		end
+	end
+	return cachedTotalCoinLabel
+end
+
+local function setStatus(txt)
+	if settings["UI"] ~= true then return end
+	local label = getStatusLabel()
+	if label then
+		label.Text = txt
+	end
+end
+
+local cachedCoinContainers = nil
+
+local function rebuildCoinContainerCache()
+	local list = {}
+	for _, model in ipairs(workspace:GetChildren()) do
+		local cc = model:FindFirstChild("CoinContainer")
+		if cc then
+			list[#list + 1] = cc
+		end
+	end
+	cachedCoinContainers = list
+end
 
 player.Idled:Connect(function()
 	virtualUser:CaptureController()
@@ -251,27 +310,16 @@ local function OdhSkid(TargetPlayer, duration)
 				RootPart.CFrame = getgenv().OldPos * CFrame.new(0, .5, 0)
 				Character:SetPrimaryPartCFrame(getgenv().OldPos * CFrame.new(0, .5, 0))
 				Humanoid:ChangeState("GettingUp")
-				table.foreach(Character:GetChildren(), function(_, x)
+				for _, x in ipairs(Character:GetChildren()) do
 					if x:IsA("BasePart") then
 						x.Velocity, x.RotVelocity = Vector3.new(), Vector3.new()
 					end
-				end)
+				end
 			end
 			task.wait()
 		until not flingActive or (RootPart and getgenv().OldPos and (RootPart.Position - getgenv().OldPos.p).Magnitude < 25)
 		workspace.FallenPartsDestroyHeight = previousDestroyHeight
 	end
-end
-
-local function setStatus(txt)
-	if settings["UI"] ~= true then return end
-	pcall(function()
-		if settings["UIMode"] == 1 then
-			player.PlayerGui:WaitForChild('UI'):WaitForChild('Interface'):WaitForChild('STATUS').Text = txt
-		else
-			player.PlayerGui:WaitForChild('Lxchu'):WaitForChild('UI'):WaitForChild('Tab01'):WaitForChild('STATUS').Text = txt
-		end
-	end)
 end
 
 local safeHold = {
@@ -515,7 +563,7 @@ local function functionInnocentSheriffHeroMurderer()
 
 		for pass = 1, maxPasses do
 			local anyAlive = false
-			for _, other in pairs(players:GetPlayers()) do
+			for _, other in ipairs(players:GetPlayers()) do
 				if other ~= player and not killed[other] then
 					local oChar = other.Character
 					local oHum  = oChar and oChar:FindFirstChildOfClass("Humanoid")
@@ -537,7 +585,6 @@ local function functionInnocentSheriffHeroMurderer()
 							task.wait(0.04)
 						end
 
-						-- Confirm death via health
 						if oHum.Health <= 0 then
 							killed[other] = true
 							other:SetAttribute('AmIAlive', nil)
@@ -566,7 +613,7 @@ local function functionInnocentSheriffHeroMurderer()
 		end
 
 		local murderer = nil
-		for _, other in pairs(players:GetPlayers()) do
+		for _, other in ipairs(players:GetPlayers()) do
 			if other ~= player and other.Character then
 				local oChar = other.Character
 				local hasKnife = oChar:FindFirstChild("Knife")
@@ -644,25 +691,39 @@ local function returnToStartPosition()
     savedAnimations = nil
 end
 
-local coinBlacklist = {}
-local coinAttemptStart = {}
-
 local function getNearestCoin()
-	local closestCoin, minDistance = nil, math.huge
-	for _, model in pairs(workspace:GetChildren()) do
-		if model:FindFirstChild("CoinContainer") then
-			for _, coin in pairs(model.CoinContainer:GetChildren()) do
-				if coin:GetAttribute("CoinID") == settings["CoinType"] and coin:FindFirstChild("TouchInterest") and not coinBlacklist[coin] then
-					local distance = (humanoidRootPart.Position - coin.Position).Magnitude
-					if distance < minDistance then
+	local containers = cachedCoinContainers
+	if not containers then
+		rebuildCoinContainerCache()
+		containers = cachedCoinContainers
+	end
+
+	local closestCoin, minSqDist = nil, math.huge
+	local hrpPos = humanoidRootPart.Position
+	local targetCoinType = settings["CoinType"]
+
+	for i = 1, #containers do
+		local container = containers[i]
+		if container.Parent then
+			local children = container:GetChildren()
+			for j = 1, #children do
+				local coin = children[j]
+				if coin:GetAttribute("CoinID") == targetCoinType
+					and coin:FindFirstChild("TouchInterest")
+					and not coinBlacklist[coin] then
+					local cpos = coin.Position
+					local dx, dy, dz = hrpPos.X - cpos.X, hrpPos.Y - cpos.Y, hrpPos.Z - cpos.Z
+					local sq = dx*dx + dy*dy + dz*dz
+					if sq < minSqDist then
 						closestCoin = coin
-						minDistance = distance
+						minSqDist = sq
 					end
 				end
 			end
 		end
 	end
-	return closestCoin, minDistance
+
+	return closestCoin, closestCoin and math.sqrt(minSqDist) or nil
 end
 
 local function startFarmingLoop()
@@ -780,24 +841,7 @@ if character and humanoid then
 end
 
 local function detect()
-	--[[if settings["FullyOptimizeWhileGrinding"] == true then
-		for _, descendant in ipairs(workspace:GetDescendants()) do
-			if (descendant:IsA("BasePart") or descendant:IsA("MeshPart")) and not players:GetPlayerFromCharacter(descendant:FindFirstAncestorOfClass("Model")) then
-				descendant.Transparency = 1
-			end
-		end
-		workspace.DescendantAdded:Connect(function(descendant)
-			if (descendant:IsA("BasePart") or descendant:IsA("MeshPart")) and settings["FullyOptimizeWhileGrinding"] == true and not players:GetPlayerFromCharacter(descendant:FindFirstAncestorOfClass("Model")) then
-				descendant.Transparency = 1
-			end
-		end)
-	else
-		for _, descendant in ipairs(workspace:GetDescendants()) do
-			if (descendant:IsA("BasePart") or descendant:IsA("MeshPart")) and not players:GetPlayerFromCharacter(descendant:FindFirstAncestorOfClass("Model")) then
-				descendant.Transparency = 0
-			end
-		end
-	end]]
+
 end
 
 coinCollected.OnClientEvent:Connect(function(coinType, current, max)
@@ -805,14 +849,13 @@ coinCollected.OnClientEvent:Connect(function(coinType, current, max)
 	roundCoins += 1
 	if settings["UI"] == true then
 		if settings["UIMode"] == 1 then
-			pcall(function()
-				player.PlayerGui:WaitForChild('UI'):WaitForChild('Interface'):WaitForChild('TOTALCOIN').Text = "TOTAL COIN COLLECTED: " .. totalCollected
-				player.PlayerGui:WaitForChild('UI'):WaitForChild('Interface'):WaitForChild('STATUS').Text = "STATUS: Collected Coin! Current Collected: " .. roundCoins .. "/" .. max
-			end)
+			local totalLabel = getTotalCoinLabel()
+			if totalLabel then
+				totalLabel.Text = "TOTAL COIN COLLECTED: " .. totalCollected
+			end
+			setStatus("STATUS: Collected Coin! Current Collected: " .. roundCoins .. "/" .. max)
 		elseif settings["UIMode"] == 2 then
-			pcall(function()
-				player.PlayerGui:WaitForChild('Lxchu'):WaitForChild('UI'):WaitForChild('Tab01'):WaitForChild('STATUS').Text = "STATUS: Collected Coin! Current Collected: " .. roundCoins .. "/" .. max
-			end)
+			setStatus("STATUS: Collected Coin! Current Collected: " .. roundCoins .. "/" .. max)
 		end
 	end
 	if coinType == settings["CoinType"] then
@@ -833,13 +876,14 @@ end)
 
 roundStart.OnClientEvent:Connect(function()
 	detect()
+	cachedCoinContainers = nil
 	if not roundStarted then
 		savedAnimations = nil
 		roundCoins = 0
 		roundStarted = true
 		farming = true
 		alive = true
-		for _, other in pairs(players:GetPlayers()) do
+		for _, other in ipairs(players:GetPlayers()) do
 			if other ~= player then
 				other:SetAttribute('AmIAlive', true)
 			end
@@ -849,8 +893,10 @@ end)
 
 roundEndFade.OnClientEvent:Connect(function()
 	detect()
-	coinBlacklist   = setmetatable({}, {__mode = "k"})
-	coinArrivalTime = setmetatable({}, {__mode = "k"})
+	coinBlacklist    = setmetatable({}, {__mode = "k"})
+	coinArrivalTime  = setmetatable({}, {__mode = "k"})
+	coinAttemptStart = setmetatable({}, {__mode = "k"})
+	cachedCoinContainers = nil
 	if roundStarted then
 		setStatus("STATUS: Waiting for round to start.")
 		roundCoins = 0
@@ -860,7 +906,7 @@ roundEndFade.OnClientEvent:Connect(function()
 		if fullBag then
 			fullBag = false
 		end
-		for _, other in pairs(players:GetPlayers()) do
+		for _, other in ipairs(players:GetPlayers()) do
 			if other ~= player then
 				other:SetAttribute('AmIAlive', nil)
 			end
