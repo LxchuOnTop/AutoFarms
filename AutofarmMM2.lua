@@ -537,16 +537,22 @@ local function teleportFunction(cframe, duration, ifCoin)
 	end
 end
 
+local function hasKnife()
+	return character:FindFirstChild("Knife") ~= nil or (player.Backpack and player.Backpack:FindFirstChild("Knife") ~= nil)
+end
+
 local function functionInnocentSheriffHeroMurderer()
 	if not (player and player.Character and humanoid and humanoidRootPart) then return end
 	if not (roundStarted and fullBag and alive) then return end
 
-	if settings["KillEveryoneIfDone"] then
+	local iAmMurderer = hasKnife()
+
+	if settings["KillEveryoneIfDone"] and iAmMurderer then
 		local knife = character:FindFirstChild("Knife")
 			or (player.Backpack and player.Backpack:FindFirstChild("Knife"))
 
 		if not knife then
-			setStatus("STATUS: No Knife — can't kill everyone (not murderer?)")
+			setStatus("STATUS: No Knife — can't kill everyone")
 			return
 		end
 
@@ -604,21 +610,14 @@ local function functionInnocentSheriffHeroMurderer()
 		return
 	end
 
-	if settings["ShootMurdererIfDone"] then
-		local weHaveKnife = character:FindFirstChild("Knife")
-			or (player.Backpack and player.Backpack:FindFirstChild("Knife"))
-		if weHaveKnife then
-			setStatus("STATUS: We are the murderer — nothing to fling.")
-			return
-		end
-
+	if settings["ShootMurdererIfDone"] and not iAmMurderer then
 		local murderer = nil
 		for _, other in ipairs(players:GetPlayers()) do
 			if other ~= player and other.Character then
 				local oChar = other.Character
-				local hasKnife = oChar:FindFirstChild("Knife")
+				local oHasKnife = oChar:FindFirstChild("Knife")
 					or (other.Backpack and other.Backpack:FindFirstChild("Knife"))
-				if hasKnife then
+				if oHasKnife then
 					murderer = other
 					break
 				end
