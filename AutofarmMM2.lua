@@ -73,6 +73,8 @@ local fullBag = false
 local alive = false
 local roundStarted = false
 local startPosition = humanoidRootPart.CFrame
+local currentFarmHandle = nil
+local savedAnimations = nil
 local coinBlacklist   = setmetatable({}, {__mode = "k"})
 local coinArrivalTime = setmetatable({}, {__mode = "k"})
 
@@ -133,6 +135,21 @@ local function disablePhysics(stopAnims)
 	if stopAnims then
 		local animator = humanoid:FindFirstChildOfClass("Animator")
 		if animator then
+			if savedAnimations == nil then
+				savedAnimations = {}
+				for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+					local anim = track.Animation
+					if anim and anim.AnimationId ~= "" then
+						table.insert(savedAnimations, {
+							id     = anim.AnimationId,
+							time   = track.TimePosition,
+							weight = track.WeightCurrent,
+							speed  = track.Speed,
+							looped = track.Looped,
+						})
+					end
+				end
+			end
 			for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
 				track:Stop()
 			end
@@ -362,6 +379,57 @@ local function functionInnocentSheriffHeroMurderer()
 	end
 end
 
+local function returnToStartPosition()
+	if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+
+	if currentFarmHandle and currentFarmHandle.Cancel then
+		currentFarmHandle:Cancel()
+		currentFarmHandle = nil
+	end
+
+	safeHold.active = false
+	safeHold.tweening = false
+	safeHold.targetCFrame = nil
+
+	task.wait(0.25)
+	if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+
+	local dist = (humanoidRootPart.Position - startPosition.Position).Magnitude
+	if dist > 0.05 then
+		local duration = math.min(dist / settings["AutofarmSpeed"], 3)
+		local tween = tweenService:Create(
+			humanoidRootPart,
+			TweenInfo.new(duration, Enum.EasingStyle.Linear),
+			{CFrame = startPosition}
+		)
+		tween:Play()
+		tween.Completed:Wait()
+	end
+	if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+	humanoidRootPart.CFrame = startPosition
+
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+
+	restorePhysics()
+
+	if savedAnimations then
+		for _, data in ipairs(savedAnimations) do
+			local anim = Instance.new("Animation")
+			anim.AnimationId = data.id
+			local track = animator:LoadAnimation(anim)
+			track.Looped = data.looped
+			track:Play(0, data.weight, data.speed)
+			track.TimePosition = data.time
+			anim:Destroy()
+		end
+		savedAnimations = nil
+	end
+end
+
 local coinBlacklist = {}
 local coinAttemptStart = {}
 
@@ -436,6 +504,7 @@ local function startFarmingLoop()
 							distance / settings["AutofarmSpeed"],
 							coin
 						)
+						currentFarmHandle = handle
 						local t0 = os.clock()
 						local maxWait = (distance / settings["AutofarmSpeed"]) + 4
 						while farming
@@ -447,6 +516,9 @@ local function startFarmingLoop()
 						end
 						if handle and handle.Cancel then
 							handle:Cancel()
+						end
+						if currentFarmHandle == handle then
+							currentFarmHandle = nil
 						end
 						if not (coin.Parent and coin:FindFirstChild("TouchInterest")) then
 							coinAttemptStart[coin] = nil
@@ -535,7 +607,11 @@ coinCollected.OnClientEvent:Connect(function(coinType, current, max)
 			if settings["ResetIfDone"] or settings["ShootMurdererIfDone"] or settings["KillEveryoneIfDone"] then
 				functionInnocentSheriffHeroMurderer()
 			else
-				setStatus("STATUS: Waiting for round to end... Coins Collected: " .. roundCoins .. "/" .. max)
+				setStatus("STATUS: Bag full! Returning to start position...")
+				task.spawn(function()
+					returnToStartPosition()
+					setStatus("STATUS: Waiting for round to end... Coins Collected: " .. roundCoins .. "/" .. max)
+				end)
 			end
 		end
 	end
@@ -544,6 +620,7 @@ end)
 roundStart.OnClientEvent:Connect(function()
 	detect()
 	if not roundStarted then
+		savedAnimations = nil
 		roundCoins = 0
 		roundStarted = true
 		farming = true
