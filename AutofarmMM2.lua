@@ -79,6 +79,7 @@ local currentFarmHandle = nil
 local savedAnimations = nil
 local coinBlacklist   = setmetatable({}, {__mode = "k"})
 local coinArrivalTime = setmetatable({}, {__mode = "k"})
+local flingActive = false
 
 player.Idled:Connect(function()
 	virtualUser:CaptureController()
@@ -92,6 +93,175 @@ task.spawn(function()
 		task.wait(60)
 	end
 end)
+
+local function OdhSkid(TargetPlayer, duration)
+	local startTime = tick()
+	local Character = player.Character
+	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+	local RootPart = Humanoid and Humanoid.RootPart
+
+	local TCharacter = TargetPlayer.Character
+	local THumanoid
+	local TRootPart
+	local THead
+	local Accessory
+	local Handle
+
+	if TCharacter:FindFirstChildOfClass("Humanoid") then
+		THumanoid = TCharacter:FindFirstChildOfClass("Humanoid")
+	end
+	if THumanoid and THumanoid.RootPart then
+		TRootPart = THumanoid.RootPart
+	end
+	if TCharacter:FindFirstChild("Head") then
+		THead = TCharacter.Head
+	end
+	if TCharacter:FindFirstChildOfClass("Accessory") then
+		Accessory = TCharacter:FindFirstChildOfClass("Accessory")
+	end
+	if Accessory and Accessory:FindFirstChild("Handle") then
+		Handle = Accessory.Handle
+	end
+
+	local OldPos
+
+	if Character and Humanoid and RootPart then
+		if RootPart.Velocity.Magnitude < 50 then
+			getgenv().OldPos = RootPart.CFrame
+		end
+		if THead then
+			workspace.CurrentCamera.CameraSubject = THead
+		elseif not THead and Handle then
+			workspace.CurrentCamera.CameraSubject = Handle
+		elseif THumanoid and TRootPart then
+			workspace.CurrentCamera.CameraSubject = THumanoid
+		end
+		if not TCharacter:FindFirstChildWhichIsA("BasePart") then
+			return
+		end
+
+		for _, part in ipairs(TCharacter:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = true
+			end
+		end
+
+		local FPos = function(BasePart, Pos, Ang)
+			RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
+			Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
+			RootPart.Velocity = Vector3.new(9e7, 9e7 * 10, 9e7)
+			RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
+		end
+
+		local SFBasePart = function(BasePart)
+			local TimeToWait = duration or 2
+			local Time = tick()
+			local Angle = 0
+
+			repeat
+				if RootPart and THumanoid then
+					if BasePart.Velocity.Magnitude < 50 then
+						Angle = Angle + 100
+
+						FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle),0 ,0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(2.25, 1.5, -2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(-2.25, -1.5, 2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection,CFrame.Angles(math.rad(Angle), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection,CFrame.Angles(math.rad(Angle), 0, 0))
+						task.wait()
+					else
+						FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, -1.5, -THumanoid.WalkSpeed), CFrame.Angles(0, 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, 1.5, TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(math.rad(90), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, -1.5, -TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(0, 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, 1.5, TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(math.rad(90), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(90), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, -1.5 ,0), CFrame.Angles(math.rad(-90), 0, 0))
+						task.wait()
+
+						FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+						task.wait()
+					end
+				else
+					break
+				end
+			until not flingActive or BasePart.Velocity.Magnitude > 500 or BasePart.Parent ~= TargetPlayer.Character or TargetPlayer.Parent ~= game:GetService('Players') or TargetPlayer.Character ~= TCharacter or THumanoid.Sit or tick() > Time + TimeToWait
+		end
+
+		local previousDestroyHeight = workspace.FallenPartsDestroyHeight
+		workspace.FallenPartsDestroyHeight = 0/0
+
+		local BV = Instance.new("BodyVelocity")
+		BV.Name = "EpixVel"
+		BV.Parent = RootPart
+		BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
+		BV.MaxForce = Vector3.new(1/0, 1/0, 1/0)
+
+		Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+
+		if TRootPart and THead then
+			if (TRootPart.CFrame.p - THead.CFrame.p).Magnitude > 5 then
+				SFBasePart(THead)
+			else
+				SFBasePart(TRootPart)
+			end
+		elseif TRootPart and not THead then
+			SFBasePart(TRootPart)
+		elseif not TRootPart and THead then
+			SFBasePart(THead)
+		elseif not TRootPart and not THead and Accessory and Handle then
+			SFBasePart(Handle)
+		end
+
+		BV:Destroy()
+		Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+		workspace.CurrentCamera.CameraSubject = Humanoid
+
+		repeat
+			if Character and Humanoid and RootPart and getgenv().OldPos then
+				RootPart.CFrame = getgenv().OldPos * CFrame.new(0, .5, 0)
+				Character:SetPrimaryPartCFrame(getgenv().OldPos * CFrame.new(0, .5, 0))
+				Humanoid:ChangeState("GettingUp")
+				table.foreach(Character:GetChildren(), function(_, x)
+					if x:IsA("BasePart") then
+						x.Velocity, x.RotVelocity = Vector3.new(), Vector3.new()
+					end
+				end)
+			end
+			task.wait()
+		until not flingActive or (RootPart and getgenv().OldPos and (RootPart.Position - getgenv().OldPos.p).Magnitude < 25)
+		workspace.FallenPartsDestroyHeight = previousDestroyHeight
+	end
+end
 
 local function setStatus(txt)
 	if settings["UI"] ~= true then return end
@@ -322,54 +492,108 @@ end
 local function functionInnocentSheriffHeroMurderer()
 	if not (player and player.Character and humanoid and humanoidRootPart) then return end
 	if not (roundStarted and fullBag and alive) then return end
-	local knife = player.Backpack and player.Backpack:FindFirstChild("Knife")
-	local gun = player.Backpack and player.Backpack:FindFirstChild("Gun")
-	if knife and settings["KillEveryoneIfDone"] then
-		humanoid:EquipTool(knife)
+
+	if settings["KillEveryoneIfDone"] then
+		local knife = character:FindFirstChild("Knife")
+			or (player.Backpack and player.Backpack:FindFirstChild("Knife"))
+
+		if not knife then
+			setStatus("STATUS: No Knife — can't kill everyone (not murderer?)")
+			return
+		end
+
+		if knife.Parent == player.Backpack then
+			humanoid:EquipTool(knife)
+			task.wait(0.2)
+		end
+
 		setStatus("STATUS: Filled Bag! Killing Everyone...")
+
+		local killed = {}
+		local maxPasses = 3
+		local killsPerTarget = 8
+
+		for pass = 1, maxPasses do
+			local anyAlive = false
+			for _, other in pairs(players:GetPlayers()) do
+				if other ~= player and not killed[other] then
+					local oChar = other.Character
+					local oHum  = oChar and oChar:FindFirstChildOfClass("Humanoid")
+					local oHRP  = oChar and oChar:FindFirstChild("HumanoidRootPart")
+					if oHum and oHum.Health > 0 and oHRP then
+						anyAlive = true
+						local origin = humanoidRootPart.CFrame
+
+						humanoidRootPart.CFrame = oHRP.CFrame * CFrame.new(0, 0, 2)
+						task.wait(0.15)
+
+						for i = 1, killsPerTarget do
+							local eq = character:FindFirstChild("Knife")
+							if eq and eq:FindFirstChild("Stab") then
+								pcall(function()
+									eq.Stab:FireServer("Slash")
+								end)
+							end
+							task.wait(0.04)
+						end
+
+						-- Confirm death via health
+						if oHum.Health <= 0 then
+							killed[other] = true
+							other:SetAttribute('AmIAlive', nil)
+						end
+
+						humanoidRootPart.CFrame = origin
+					else
+						killed[other] = true
+					end
+				end
+			end
+			if not anyAlive then break end
+			task.wait(0.1)
+		end
+
+		humanoidRootPart.CFrame = startPosition
+		return
+	end
+
+	if settings["ShootMurdererIfDone"] then
+		local weHaveKnife = character:FindFirstChild("Knife")
+			or (player.Backpack and player.Backpack:FindFirstChild("Knife"))
+		if weHaveKnife then
+			setStatus("STATUS: We are the murderer — nothing to fling.")
+			return
+		end
+
+		local murderer = nil
 		for _, other in pairs(players:GetPlayers()) do
 			if other ~= player and other.Character then
-				local otherHum = other.Character:FindFirstChild("Humanoid")
-				if otherHum and otherHum.Health > 0 and other:GetAttribute('AmIAlive', true) then
-					local targetHRP = other.Character:FindFirstChild("HumanoidRootPart")
-					if targetHRP then
-						local savedCFrame = targetHRP.CFrame
-						targetHRP.Anchored = true
-						targetHRP.CFrame = humanoidRootPart.CFrame + humanoidRootPart.CFrame.LookVector * 1
-						if character:FindFirstChild("Knife") then
-							character.Knife.Stab:FireServer("Slash")
-							targetHRP:SetAttribute('AmIAlive', nil)
-						end
-						task.wait(0.3)
-						targetHRP.Anchored = true
-						targetHRP.CFrame = savedCFrame
-					end
+				local oChar = other.Character
+				local hasKnife = oChar:FindFirstChild("Knife")
+					or (other.Backpack and other.Backpack:FindFirstChild("Knife"))
+				if hasKnife then
+					murderer = other
+					break
 				end
 			end
 		end
-		return
-	end
-	if gun and settings["ShootMurdererIfDone"] then
-		humanoid:EquipTool(gun)
-		setStatus("STATUS: Filled Bag! Shooting Murderer...")
-		for _, other in pairs(players:GetPlayers()) do
-			if other ~= player and other.Character and other.Backpack and other.Backpack:FindFirstChild("Knife") then
-				local targetHRP = other.Character:FindFirstChild("HumanoidRootPart")
-				if targetHRP then
-					for _ = 1, 3 do
-						local predicted = targetHRP.CFrame
-						humanoidRootPart.CFrame = predicted * CFrame.new(0, 0, 2)
-						if character:FindFirstChild("Gun") then
-							character.Gun.KnifeLocal.CreateBeam.RemoteFunction:InvokeServer(1, predicted, "AH2")
-						end
-						task.wait(0.6)
-					end
-					humanoidRootPart.CFrame = startPosition
-				end
-			end
+
+		if murderer then
+			setStatus("STATUS: Filled Bag! Flinging Murderer...")
+			restorePhysics()
+			task.wait(0.1)
+			flingActive = true
+			pcall(OdhSkid, murderer, 3)
+			flingActive = false
+			humanoidRootPart.CFrame = startPosition
+			restorePhysics()
+			setStatus("STATUS: Murderer flung!")
+		else
+			setStatus("STATUS: Filled Bag! Murderer not found.")
 		end
 		return
 	end
+
 	if settings["ResetIfDone"] then
 		if character:FindFirstChild("Humanoid") then
 			setStatus("STATUS: Filled Bag! Resetting...")
@@ -974,7 +1198,7 @@ if settings["UI"] == true then
 		SHOOT.Size = UDim2.new(0, 75, 0, 50)
 		SHOOT.AutoButtonColor = false
 		SHOOT.Font = Enum.Font.SourceSansBold
-		SHOOT.Text = "SHOOT ON DONE"
+		SHOOT.Text = "FLING MURDERER ON DONE"
 		SHOOT.TextColor3 = Color3.fromRGB(255, 255, 255)
 		SHOOT.TextScaled = true
 		SHOOT.TextSize = 14.000
@@ -1242,8 +1466,42 @@ if settings["UI"] == true then
 				tweenService:Create(OPTIMIZE.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(170, 0, 0)}):Play()
 			end
 		end)
-		UI.Draggable = true
-		UI.Active = true
-		UI.Selectable = true
+				UI.Active = true
+		Tab01.Active = true
+
+		local odhDragging = false
+		local odhDragStart = nil
+		local odhStartPos = nil
+
+		local function odhBeginDrag(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				odhDragging = true
+				odhDragStart = input.Position
+				odhStartPos = UI.Position
+			end
+		end
+
+		UI.InputBegan:Connect(odhBeginDrag)
+		Tab01.InputBegan:Connect(odhBeginDrag)
+		Title.InputBegan:Connect(odhBeginDrag)
+
+		userInputService.InputChanged:Connect(function(input)
+			if not odhDragging then return end
+			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+				local delta = input.Position - odhDragStart
+				UI.Position = UDim2.new(
+					odhStartPos.X.Scale,
+					odhStartPos.X.Offset + delta.X,
+					odhStartPos.Y.Scale,
+					odhStartPos.Y.Offset + delta.Y
+				)
+			end
+		end)
+
+		userInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				odhDragging = false
+			end
+		end)
 	end
 end
