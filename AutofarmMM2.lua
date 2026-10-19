@@ -578,7 +578,7 @@ local function functionInnocentSheriffHeroMurderer()
 						anyAlive = true
 						local origin = humanoidRootPart.CFrame
 
-						oHRP.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, -2)
+						oHRP.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, -0.5)
 						task.wait(0.15)
 
 						for i = 1, killsPerTarget do
