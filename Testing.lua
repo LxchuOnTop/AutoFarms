@@ -426,19 +426,54 @@ local function restorePhysics()
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 end
 
-local function prepareTeleport(stopAnimations)
-    if stopAnimations then
-        disablePhysics(true)
-    else
-        for _, descendant in ipairs(character:GetDescendants()) do
-            if descendant:IsA("BasePart") then
-                descendant.CanCollide = false
-            end
-        end
-        humanoid.AutoRotate = false
-        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-    end
+local function restoreStandingPhysics()
+	if not (character and humanoidRootPart and humanoidRootPart.Parent) then return end
+
+	for _, descendant in ipairs(character:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			if descendant.Name == "Head"
+				or descendant.Name == "UpperTorso"
+				or descendant.Name == "LowerTorso"
+				or descendant.Name == "Torso" then
+				descendant.CanCollide = true
+			end
+		end
+	end
+	humanoidRootPart.CanCollide = true
+	humanoid.AutoRotate = true
+	humanoid.PlatformStand = false
+	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+
+	local animateScript = character:FindFirstChild("Animate")
+	if animateScript then animateScript.Enabled = true end
+	if not humanoid:FindFirstChildOfClass("Animator") then
+		local animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+end
+
+local function prepareTeleport(mode)
+	if mode == "Safe" then
+		disablePhysics(true)
+		return
+	end
+
+	for _, descendant in ipairs(character:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.CanCollide = false
+		end
+	end
+	humanoid.AutoRotate = false
+	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if animator then
+		for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+			track:Stop()
+		end
+	end
 end
 
 local function teleportFunction(cframe, duration, ifCoin)
@@ -483,19 +518,25 @@ local function teleportFunction(cframe, duration, ifCoin)
 	end
 
 	if settings["Mode"] == "Standing" then
-		prepareTeleport(false)
-		setStatus("STATUS: Going for another coin.")
-
-		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
-		if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-			currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
-			humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
+		if math.abs(humanoidRootPart.CFrame.UpVector.Y) < 0.5 then
+			local pos = humanoidRootPart.Position
+			humanoidRootPart.CFrame = CFrame.new(pos)
+			humanoid.PlatformStand = false
+			humanoid.AutoRotate = true
+			restoreStandingPhysics()
 		end
 
-		local desiredY = cframe.Position.Y - settings["SafeModeOffset"]
-		local safeY = computeSafeTargetY(ifCoin, desiredY, true)  -- same as Safe
-		local targetPos = Vector3.new(cframe.Position.X, safeY, cframe.Position.Z)
-		local targetCFrame = CFrame.new(targetPos) * currentRot
+		prepareTeleport("Standing")
+		setStatus("STATUS: Going for another coin.")
+
+		local cf = humanoidRootPart.CFrame
+		local look = cf.LookVector
+		local flatLook = Vector3.new(look.X, 0, look.Z)
+		if flatLook.Magnitude < 0.01 then flatLook = Vector3.new(0, 0, -1) end
+		local uprightRot = CFrame.lookAt(Vector3.zero, flatLook.Unit)
+
+		local safeY = computeSafeTargetY(ifCoin, cframe.Position.Y, false)
+		local targetCFrame = CFrame.new(cframe.Position.X, safeY, cframe.Position.Z) * uprightRot
 
 		safeHold.active = true
 		safeHold.targetCFrame = targetCFrame
@@ -512,9 +553,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 				{CFrame = targetCFrame}
 			)
 			tween.Completed:Connect(function()
-				if not cancelled then
-					safeHold.tweening = false
-				end
+				if not cancelled then safeHold.tweening = false end
 			end)
 			tween:Play()
 		else
@@ -532,6 +571,10 @@ local function teleportFunction(cframe, duration, ifCoin)
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
 			task.wait(settings["TweenDelay"])
+
+			if not cancelled then
+				restoreStandingPhysics()
+			end
 		end)
 
 		function handle:Cancel()
@@ -821,22 +864,34 @@ local function startFarmingLoop()
 							coinArrivalTime[coin] = nil
 							setStatus("STATUS: Coin stuck for 10s! Blacklisting...")
 						else
-						prepareTeleport(settings["Mode"] == "Safe")
-						local desiredY = coin.Position.Y - settings["SafeModeOffset"]
-							local safeY = computeSafeTargetY(coin, desiredY, true)
-							local targetPos = Vector3.new(
-								coin.Position.X,
-								safeY,
-								coin.Position.Z
-							)
-							local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
-							if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-								currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
-								humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
+							prepareTeleport(settings["Mode"])
+
+							local uprightRot
+							local desiredY
+							local safeY
+							if settings["Mode"] == "Safe" then
+								local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
+								if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
+									currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
+									humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
+								end
+								uprightRot = currentRot
+								desiredY = coin.Position.Y - settings["SafeModeOffset"]
+								safeY = computeSafeTargetY(coin, desiredY, true)
+							else
+								local cf = humanoidRootPart.CFrame
+								local look = cf.LookVector
+								local flatLook = Vector3.new(look.X, 0, look.Z)
+								if flatLook.Magnitude < 0.01 then flatLook = Vector3.new(0, 0, -1) end
+								uprightRot = CFrame.lookAt(Vector3.zero, flatLook.Unit)
+								desiredY = coin.Position.Y
+								safeY = computeSafeTargetY(coin, desiredY, false)
 							end
+
+							local targetPos = Vector3.new(coin.Position.X, safeY, coin.Position.Z)
 							safeHold.active = true
 							safeHold.tweening = false
-							safeHold.targetCFrame = CFrame.new(targetPos) * currentRot
+							safeHold.targetCFrame = CFrame.new(targetPos) * uprightRot
 							humanoidRootPart.CFrame = safeHold.targetCFrame
 
 							coinArrivalTime[coin] = coinArrivalTime[coin] or os.clock()
@@ -846,6 +901,12 @@ local function startFarmingLoop()
 								task.wait(0.1)
 								if targetCoin and targetCoin.Parent and targetCoin:FindFirstChild("TouchInterest") then
 									targetCoin.CFrame = humanoidRootPart.CFrame
+								end
+								if settings["Mode"] == "Standing" then
+									task.wait(settings["TweenDelay"])
+									if humanoidRootPart and humanoidRootPart.Parent then
+										restoreStandingPhysics()
+									end
 								end
 							end)
 						end
@@ -1412,10 +1473,26 @@ if settings["UI"] == true then
 		SAFE.MouseLeave:Connect(function()
 			tweenService:Create(SAFE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
 		end)
-		SAFE.MouseButton1Click:Connect(function()
+				SAFE.MouseButton1Click:Connect(function()
 			settings["Mode"] = "Safe"
 			tweenService:Create(SAFE.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(75, 170, 0)}):Play()
 			tweenService:Create(STANDING.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(170, 0, 0)}):Play()
+			-- Safe mode wants to be flat → let the next grab flatten us.
+		end)
+
+		STANDING.MouseButton1Click:Connect(function()
+			settings["Mode"] = "Standing"
+			tweenService:Create(STANDING.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(75, 170, 0)}):Play()
+			tweenService:Create(SAFE.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(170, 0, 0)}):Play()
+			if humanoidRootPart and humanoidRootPart.Parent then
+				safeHold.active = false
+				safeHold.tweening = false
+				safeHold.targetCFrame = nil
+				if math.abs(humanoidRootPart.CFrame.UpVector.Y) < 0.5 then
+					humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position)
+				end
+				restoreStandingPhysics()
+			end
 		end)
 		local uStroke2 = Instance.new('UIStroke', STANDING)
 		uStroke2.Thickness = 1.5
