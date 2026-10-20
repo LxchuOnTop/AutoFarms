@@ -451,6 +451,16 @@ local function restoreStandingPhysics()
 		local animator = Instance.new("Animator")
 		animator.Parent = humanoid
 	end
+
+	task.spawn(function()
+		pcall(function()
+			humanoid:ChangeState(Enum.HumanoidStateType.Running)
+			task.wait()
+			if humanoid and humanoid.Parent then
+				humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+			end
+		end)
+	end)
 end
 
 local function prepareTeleport(mode)
