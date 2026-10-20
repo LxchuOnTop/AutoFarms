@@ -426,6 +426,21 @@ local function restorePhysics()
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 end
 
+local function prepareTeleport(stopAnimations)
+    if stopAnimations then
+        disablePhysics(true)
+    else
+        for _, descendant in ipairs(character:GetDescendants()) do
+            if descendant:IsA("BasePart") then
+                descendant.CanCollide = false
+            end
+        end
+        humanoid.AutoRotate = false
+        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+    end
+end
+
 local function teleportFunction(cframe, duration, ifCoin)
 	if ifCoin then
 		if coinBlacklist[ifCoin] then return nil end
@@ -468,47 +483,62 @@ local function teleportFunction(cframe, duration, ifCoin)
 	end
 
 	if settings["Mode"] == "Standing" then
-		safeHold.active = false
-		safeHold.tweening = false
-		safeHold.targetCFrame = nil
-		disablePhysics(true)
+		prepareTeleport(false)
 		setStatus("STATUS: Going for another coin.")
-		local handle = {}
 
-		local adjustedCFrame = cframe
-		if ifCoin then
-			local rot = cframe - cframe.Position
-			local safeY = computeSafeTargetY(ifCoin, cframe.Position.Y)
-			adjustedCFrame = CFrame.new(cframe.Position.X, safeY, cframe.Position.Z) * rot
+		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
+		if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
+			currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
+			humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
+		end
+
+		local desiredY = cframe.Position.Y - settings["SafeModeOffset"]
+		local safeY = computeSafeTargetY(ifCoin, desiredY, true)  -- same as Safe
+		local targetPos = Vector3.new(cframe.Position.X, safeY, cframe.Position.Z)
+		local targetCFrame = CFrame.new(targetPos) * currentRot
+
+		safeHold.active = true
+		safeHold.targetCFrame = targetCFrame
+
+		local handle = {}
+		local tween
+
+		local dist = (humanoidRootPart.Position - targetCFrame.Position).Magnitude
+		if dist > 0.05 then
+			safeHold.tweening = true
+			tween = tweenService:Create(
+				humanoidRootPart,
+				TweenInfo.new(math.max(duration, 0.01), Enum.EasingStyle.Linear),
+				{CFrame = targetCFrame}
+			)
+			tween.Completed:Connect(function()
+				if not cancelled then
+					safeHold.tweening = false
+				end
+			end)
+			tween:Play()
+		else
+			safeHold.tweening = false
+			humanoidRootPart.CFrame = targetCFrame
 		end
 
 		task.spawn(function()
-			if not tweenTo(adjustedCFrame, duration) then return end
+			if tween then tween.Completed:Wait() end
+			if cancelled then return end
 			if ifCoin then
 				coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
 			end
-			task.wait(0.1)
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
 			task.wait(settings["TweenDelay"])
-			if not cancelled then
-				local animator = humanoid:FindFirstChildOfClass("Animator")
-				if not animator then
-					local newAnim = Instance.new("Animator")
-					newAnim.Parent = humanoid
-				end
-				restorePhysics()
-			end
 		end)
 
 		function handle:Cancel()
 			cancelled = true
-			if currentTween then currentTween:Cancel() end
-			if coinCFrame then
-				humanoidRootPart.CFrame = coinCFrame + Vector3.new(0, 3, 0)
-			end
-			restorePhysics()
+			if tween then tween:Cancel() end
+			safeHold.targetCFrame = humanoidRootPart.CFrame
+			safeHold.tweening = false
 		end
 		return handle
 	elseif settings["Mode"] == "Safe" then
@@ -791,9 +821,9 @@ local function startFarmingLoop()
 							coinArrivalTime[coin] = nil
 							setStatus("STATUS: Coin stuck for 10s! Blacklisting...")
 						else
-							disablePhysics(true)
-							local desiredY = coin.Position.Y - settings["SafeModeOffset"]
-							local safeY = computeSafeTargetY(coin, desiredY, true)  -- <-- pass true
+						prepareTeleport(settings["Mode"] == "Safe")
+						local desiredY = coin.Position.Y - settings["SafeModeOffset"]
+							local safeY = computeSafeTargetY(coin, desiredY, true)
 							local targetPos = Vector3.new(
 								coin.Position.X,
 								safeY,
@@ -1691,7 +1721,7 @@ end
 
 task.spawn(function()
     while true do
-        if farming and not fullBag and roundStarted and character and humanoid and humanoid.Parent then
+    	if settings["Mode"] == "Safe" and farming and not fullBag and roundStarted and character and humanoid and humanoid.Parent then
             local animateScript = character:FindFirstChild("Animate")
             if animateScript and animateScript.Enabled then
                 animateScript.Enabled = false
