@@ -77,6 +77,33 @@ local currentFarmHandle = nil
 local savedAnimations = nil
 local flingActive = false
 
+local function computeSafeTargetY(coinPart, desiredY, allowUnderground)
+    if not coinPart or not coinPart.Parent then return desiredY end
+
+    if allowUnderground then
+        return desiredY
+    end
+
+    local rp = RaycastParams.new()
+    rp.FilterType = Enum.RaycastFilterType.Exclude
+    rp.FilterDescendantsInstances = {character, coinPart}
+    local origin = Vector3.new(coinPart.Position.X, coinPart.Position.Y + 0.1, coinPart.Position.Z)
+    local distance = origin.Y - desiredY + 2
+    if distance <= 0 then return desiredY end
+    local result = workspace:Raycast(origin, Vector3.new(0, -distance, 0), rp)
+    if result then
+        return math.max(desiredY, result.Position.Y + 3)
+    end
+    return desiredY
+end
+
+local function enableAnimate()
+    if character then
+        local a = character:FindFirstChild("Animate")
+        if a then a.Enabled = true end
+    end
+end
+
 local coinBlacklist   = setmetatable({}, {__mode = "k"})
 local coinArrivalTime = setmetatable({}, {__mode = "k"})
 local coinAttemptStart = setmetatable({}, {__mode = "k"})
@@ -353,6 +380,8 @@ local function disablePhysics(stopAnims)
 	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 	if stopAnims then
+		local animateScript = character:FindFirstChild("Animate")
+		if animateScript then animateScript.Enabled = false end
 		local animator = humanoid:FindFirstChildOfClass("Animator")
 		if animator then
 			if savedAnimations == nil then
@@ -418,6 +447,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 			humanoidRootPart.CFrame = targetCFrame
 			return not cancelled
 		end
+		dur = math.max(dur, 0.01)
 		currentTween = tweenService:Create(
 			humanoidRootPart,
 			TweenInfo.new(dur, Enum.EasingStyle.Linear),
@@ -445,8 +475,15 @@ local function teleportFunction(cframe, duration, ifCoin)
 		setStatus("STATUS: Going for another coin.")
 		local handle = {}
 
+		local adjustedCFrame = cframe
+		if ifCoin then
+			local rot = cframe - cframe.Position
+			local safeY = computeSafeTargetY(ifCoin, cframe.Position.Y)
+			adjustedCFrame = CFrame.new(cframe.Position.X, safeY, cframe.Position.Z) * rot
+		end
+
 		task.spawn(function()
-			if not tweenTo(cframe, duration) then return end
+			if not tweenTo(adjustedCFrame, duration) then return end
 			if ifCoin then
 				coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
 			end
@@ -483,9 +520,11 @@ local function teleportFunction(cframe, duration, ifCoin)
 			currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
 			humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 		end
+		local desiredY = cframe.Position.Y - settings["SafeModeOffset"]
+		local safeY = computeSafeTargetY(ifCoin, desiredY, true)
 		local targetPos = Vector3.new(
 			cframe.Position.X,
-			cframe.Position.Y - settings["SafeModeOffset"],
+			safeY,
 			cframe.Position.Z
 		)
 		local targetCFrame = CFrame.new(targetPos) * currentRot
@@ -498,6 +537,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		local dist = (humanoidRootPart.Position - targetCFrame.Position).Magnitude
 		if dist > 0.05 then
+			local safeDur = math.max(duration, 0.01)
 			safeHold.tweening = true
 			tween = tweenService:Create(
 				humanoidRootPart,
@@ -668,7 +708,7 @@ local function returnToStartPosition()
 
     local dist = (humanoidRootPart.Position - startPosition.Position).Magnitude
     if dist > 0.05 then
-        local duration = math.min(dist / settings["AutofarmSpeed"], 3)
+        local duration = math.clamp(dist / settings["AutofarmSpeed"], 0.01, 3)
         local tween = tweenService:Create(
             humanoidRootPart,
             TweenInfo.new(duration, Enum.EasingStyle.Linear),
@@ -685,7 +725,12 @@ local function returnToStartPosition()
         animator.Parent = humanoid
     end
 
+	enableAnimate()
+
     restorePhysics()
+
+	humanoid:ChangeState(Enum.HumanoidStateType.Running)
+	humanoid:ChangeState(Enum.HumanoidStateType.Landed)
 
     savedAnimations = nil
 end
@@ -747,9 +792,11 @@ local function startFarmingLoop()
 							setStatus("STATUS: Coin stuck for 10s! Blacklisting...")
 						else
 							disablePhysics(true)
+							local desiredY = coin.Position.Y - settings["SafeModeOffset"]
+							local safeY = computeSafeTargetY(coin, desiredY, true)  -- <-- pass true
 							local targetPos = Vector3.new(
 								coin.Position.X,
-								coin.Position.Y - settings["SafeModeOffset"],
+								safeY,
 								coin.Position.Z
 							)
 							local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
@@ -860,6 +907,7 @@ coinCollected.OnClientEvent:Connect(function(coinType, current, max)
 	if coinType == settings["CoinType"] then
 		if current == max then
 			fullBag = true
+			farming = false
 			if settings["ResetIfDone"] or settings["ShootMurdererIfDone"] or settings["KillEveryoneIfDone"] then
 				functionInnocentSheriffHeroMurderer()
 			else
@@ -874,43 +922,62 @@ coinCollected.OnClientEvent:Connect(function(coinType, current, max)
 end)
 
 roundStart.OnClientEvent:Connect(function()
-	detect()
-	cachedCoinContainers = nil
-	if not roundStarted then
-		savedAnimations = nil
-		roundCoins = 0
-		roundStarted = true
-		farming = true
-		alive = true
-		for _, other in ipairs(players:GetPlayers()) do
-			if other ~= player then
-				other:SetAttribute('AmIAlive', true)
-			end
-		end
-	end
+    detect()
+    cachedCoinContainers = nil
+
+    savedAnimations = nil
+    roundCoins = 0
+    roundStarted = true
+    farming = true
+    alive = true
+    fullBag = false
+
+    if currentFarmHandle and currentFarmHandle.Cancel then
+        pcall(function() currentFarmHandle:Cancel() end)
+    end
+    currentFarmHandle = nil
+
+    safeHold.active = false
+    safeHold.tweening = false
+    safeHold.targetCFrame = nil
+
+    for _, other in ipairs(players:GetPlayers()) do
+        if other ~= player then
+            other:SetAttribute('AmIAlive', true)
+        end
+    end
 end)
 
 roundEndFade.OnClientEvent:Connect(function()
-	detect()
-	coinBlacklist    = setmetatable({}, {__mode = "k"})
-	coinArrivalTime  = setmetatable({}, {__mode = "k"})
-	coinAttemptStart = setmetatable({}, {__mode = "k"})
-	cachedCoinContainers = nil
-	if roundStarted then
-		setStatus("STATUS: Waiting for round to start.")
-		roundCoins = 0
-		roundStarted = false
-		farming = false
-		alive = false
-		if fullBag then
-			fullBag = false
-		end
-		for _, other in ipairs(players:GetPlayers()) do
-			if other ~= player then
-				other:SetAttribute('AmIAlive', nil)
-			end
-		end
-	end
+    detect()
+	enableAnimate()
+    coinBlacklist = setmetatable({}, {__mode = "k"})
+    coinArrivalTime = setmetatable({}, {__mode = "k"})
+    coinAttemptStart = setmetatable({}, {__mode = "k"})
+    cachedCoinContainers = nil
+
+    -- Kill any active tween so we don't leave the character pinned mid-air
+    if currentFarmHandle and currentFarmHandle.Cancel then
+        pcall(function() currentFarmHandle:Cancel() end)
+    end
+    currentFarmHandle = nil
+    safeHold.active = false
+    safeHold.tweening = false
+    safeHold.targetCFrame = nil
+
+    if roundStarted then
+        setStatus("STATUS: Waiting for round to start.")
+        roundCoins = 0
+        roundStarted = false
+        farming = false
+        alive = false
+        fullBag = false
+        for _, other in ipairs(players:GetPlayers()) do
+            if other ~= player then
+                other:SetAttribute('AmIAlive', nil)
+            end
+        end
+    end
 end)
 
 if settings["UI"] == true then
@@ -1621,3 +1688,22 @@ if settings["UI"] == true then
 		end)
 	end
 end
+
+task.spawn(function()
+    while true do
+        if farming and not fullBag and roundStarted and character and humanoid and humanoid.Parent then
+            local animateScript = character:FindFirstChild("Animate")
+            if animateScript and animateScript.Enabled then
+                animateScript.Enabled = false
+            end
+            local animator = humanoid:FindFirstChildOfClass("Animator")
+            if animator then
+                local tracks = animator:GetPlayingAnimationTracks()
+                for i = 1, #tracks do
+                    tracks[i]:Stop(0)
+                end
+            end
+        end
+        task.wait(0.05)
+    end
+end)
