@@ -77,8 +77,13 @@ local currentFarmHandle = nil
 local savedAnimations = nil
 local flingActive = false
 
-local function computeSafeTargetY(coinPart, desiredY)
+local function computeSafeTargetY(coinPart, desiredY, allowUnderground)
     if not coinPart or not coinPart.Parent then return desiredY end
+
+    if allowUnderground then
+        return desiredY
+    end
+
     local rp = RaycastParams.new()
     rp.FilterType = Enum.RaycastFilterType.Exclude
     rp.FilterDescendantsInstances = {character, coinPart}
@@ -87,7 +92,7 @@ local function computeSafeTargetY(coinPart, desiredY)
     if distance <= 0 then return desiredY end
     local result = workspace:Raycast(origin, Vector3.new(0, -distance, 0), rp)
     if result then
-        return math.max(desiredY, result.Position.Y + 3) -- 3 studs = standing HRP clearance
+        return math.max(desiredY, result.Position.Y + 3)
     end
     return desiredY
 end
@@ -516,7 +521,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 			humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 		end
 		local desiredY = cframe.Position.Y - settings["SafeModeOffset"]
-		local safeY = computeSafeTargetY(ifCoin, desiredY)
+		local safeY = computeSafeTargetY(ifCoin, desiredY, true)
 		local targetPos = Vector3.new(
 			cframe.Position.X,
 			safeY,
@@ -724,6 +729,9 @@ local function returnToStartPosition()
 
     restorePhysics()
 
+	humanoid:ChangeState(Enum.HumanoidStateType.Running)
+	humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+
     savedAnimations = nil
 end
 
@@ -785,7 +793,7 @@ local function startFarmingLoop()
 						else
 							disablePhysics(true)
 							local desiredY = coin.Position.Y - settings["SafeModeOffset"]
-							local safeY = computeSafeTargetY(coin, desiredY)
+							local safeY = computeSafeTargetY(coin, desiredY, true)  -- <-- pass true
 							local targetPos = Vector3.new(
 								coin.Position.X,
 								safeY,
@@ -899,6 +907,7 @@ coinCollected.OnClientEvent:Connect(function(coinType, current, max)
 	if coinType == settings["CoinType"] then
 		if current == max then
 			fullBag = true
+			farming = false
 			if settings["ResetIfDone"] or settings["ShootMurdererIfDone"] or settings["KillEveryoneIfDone"] then
 				functionInnocentSheriffHeroMurderer()
 			else
@@ -1682,7 +1691,7 @@ end
 
 task.spawn(function()
     while true do
-        if farming and roundStarted and character and humanoid and humanoid.Parent then
+        if farming and not fullBag and roundStarted and character and humanoid and humanoid.Parent then
             local animateScript = character:FindFirstChild("Animate")
             if animateScript and animateScript.Enabled then
                 animateScript.Enabled = false
