@@ -383,14 +383,6 @@ local function disablePhysics(stopAnims)
     humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
     humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 
-    if not physicsSettled then
-        physicsSettled = true
-        runService.Heartbeat:Wait()
-        runService.Heartbeat:Wait()
-        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-    end
-
     if stopAnims then
         local animateScript = character:FindFirstChild("Animate")
         if animateScript then animateScript.Enabled = false end
@@ -417,6 +409,26 @@ local function disablePhysics(stopAnims)
             animator.Parent = nil
         end
     end
+end
+
+local function enterTunnelIfNeeded(targetY)
+    if physicsSettled then return end
+    if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+
+    physicsSettled = true
+
+    task.wait()
+
+    if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+
+    local rot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
+    humanoidRootPart.CFrame = CFrame.new(
+        humanoidRootPart.Position.X,
+        targetY,
+        humanoidRootPart.Position.Z
+    ) * rot
+    humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+    humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 end
 
 local function restorePhysics()
@@ -534,6 +546,13 @@ local function teleportFunction(cframe, duration, ifCoin)
 			currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
 			humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 		end
+
+		if not physicsSettled then
+			local tunnelY = (ifCoin and ifCoin.Position.Y or cframe.Position.Y) - settings["SafeModeOffset"]
+			enterTunnelIfNeeded(tunnelY)
+			if not (humanoidRootPart and humanoidRootPart.Parent) then return nil end
+		end
+
 		local desiredY = cframe.Position.Y - settings["SafeModeOffset"]
 		local safeY = computeSafeTargetY(ifCoin, desiredY, true)
 		local targetPos = Vector3.new(
