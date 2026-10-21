@@ -76,6 +76,7 @@ local startPosition = humanoidRootPart.CFrame
 local currentFarmHandle = nil
 local savedAnimations = nil
 local flingActive = false
+local physicsSettled = false
 
 local function computeSafeTargetY(coinPart, desiredY, allowUnderground)
     if not coinPart or not coinPart.Parent then return desiredY end
@@ -366,124 +367,77 @@ runService.Stepped:Connect(function()
 end)
 
 local function disablePhysics(stopAnims)
-	for _, descendant in ipairs(character:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			descendant.CanCollide = false
-		end
-	end
-	upperTorso.CanCollide = false
-	lowerTorso.CanCollide = false
-	humanoidRootPart.CanCollide = false
-	humanoid.AutoRotate = false
-	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-	humanoid.PlatformStand = true
-	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-	if stopAnims then
-		local animateScript = character:FindFirstChild("Animate")
-		if animateScript then animateScript.Enabled = false end
-		local animator = humanoid:FindFirstChildOfClass("Animator")
-		if animator then
-			if savedAnimations == nil then
-				savedAnimations = {}
-				for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-					local anim = track.Animation
-					if anim and anim.AnimationId ~= "" then
-						table.insert(savedAnimations, {
-							id     = anim.AnimationId,
-							time   = track.TimePosition,
-							weight = track.WeightCurrent,
-							speed  = track.Speed,
-							looped = track.Looped,
-						})
-					end
-				end
-			end
-			for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-				track:Stop()
-			end
-			animator.Parent = nil
-		end
-	end
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("BasePart") then
+            descendant.CanCollide = false
+        end
+    end
+    upperTorso.CanCollide = false
+    lowerTorso.CanCollide = false
+    humanoidRootPart.CanCollide = false
+    humanoid.AutoRotate = false
+
+    humanoid.PlatformStand = true
+    humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+    humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+    humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+
+    if not physicsSettled then
+        physicsSettled = true
+        runService.Heartbeat:Wait()
+        runService.Heartbeat:Wait()
+        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    if stopAnims then
+        local animateScript = character:FindFirstChild("Animate")
+        if animateScript then animateScript.Enabled = false end
+        local animator = humanoid:FindFirstChildOfClass("Animator")
+        if animator then
+            if savedAnimations == nil then
+                savedAnimations = {}
+                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                    local anim = track.Animation
+                    if anim and anim.AnimationId ~= "" then
+                        table.insert(savedAnimations, {
+                            id     = anim.AnimationId,
+                            time   = track.TimePosition,
+                            weight = track.WeightCurrent,
+                            speed  = track.Speed,
+                            looped = track.Looped,
+                        })
+                    end
+                end
+            end
+            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                track:Stop()
+            end
+            animator.Parent = nil
+        end
+    end
 end
 
 local function restorePhysics()
-	for _, descendant in ipairs(character:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			if descendant.Name == "Head"
-				or descendant.Name == "UpperTorso"
-				or descendant.Name == "LowerTorso"
-				or descendant.Name == "Torso" then
-				descendant.CanCollide = true
-			end
-		end
-	end
-	humanoidRootPart.CanCollide = true
-	humanoid.AutoRotate = true
-	humanoid.PlatformStand = false
-	humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-end
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("BasePart") then
+            if descendant.Name == "Head"
+                or descendant.Name == "UpperTorso"
+                or descendant.Name == "LowerTorso"
+                or descendant.Name == "Torso" then
+                descendant.CanCollide = true
+            end
+        end
+    end
+    humanoidRootPart.CanCollide = true
+    humanoid.AutoRotate = true
+    humanoid.PlatformStand = false
+    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+    humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+    humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 
-local function restoreStandingPhysics()
-	if not (character and humanoidRootPart and humanoidRootPart.Parent) then return end
-
-	for _, descendant in ipairs(character:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			if descendant.Name == "Head"
-				or descendant.Name == "UpperTorso"
-				or descendant.Name == "LowerTorso"
-				or descendant.Name == "Torso" then
-				descendant.CanCollide = true
-			end
-		end
-	end
-	humanoidRootPart.CanCollide = true
-	humanoid.AutoRotate = true
-	humanoid.PlatformStand = false
-	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-
-	local animateScript = character:FindFirstChild("Animate")
-	if animateScript then animateScript.Enabled = true end
-	if not humanoid:FindFirstChildOfClass("Animator") then
-		local animator = Instance.new("Animator")
-		animator.Parent = humanoid
-	end
-
-	task.spawn(function()
-		pcall(function()
-			humanoid:ChangeState(Enum.HumanoidStateType.Running)
-			task.wait()
-			if humanoid and humanoid.Parent then
-				humanoid:ChangeState(Enum.HumanoidStateType.Landed)
-			end
-		end)
-	end)
-end
-
-local function prepareTeleport(mode)
-	if mode == "Safe" then
-		disablePhysics(true)
-		return
-	end
-
-	for _, descendant in ipairs(character:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			descendant.CanCollide = false
-		end
-	end
-	humanoid.AutoRotate = false
-	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if animator then
-		for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-			track:Stop()
-		end
-	end
+    physicsSettled = false
 end
 
 local function teleportFunction(cframe, duration, ifCoin)
@@ -528,70 +482,47 @@ local function teleportFunction(cframe, duration, ifCoin)
 	end
 
 	if settings["Mode"] == "Standing" then
-		if math.abs(humanoidRootPart.CFrame.UpVector.Y) < 0.5 then
-			local pos = humanoidRootPart.Position
-			humanoidRootPart.CFrame = CFrame.new(pos)
-			humanoid.PlatformStand = false
-			humanoid.AutoRotate = true
-			restoreStandingPhysics()
-		end
-
-		prepareTeleport("Standing")
+		safeHold.active = false
+		safeHold.tweening = false
+		safeHold.targetCFrame = nil
+		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
-
-		local cf = humanoidRootPart.CFrame
-		local look = cf.LookVector
-		local flatLook = Vector3.new(look.X, 0, look.Z)
-		if flatLook.Magnitude < 0.01 then flatLook = Vector3.new(0, 0, -1) end
-		local uprightRot = CFrame.lookAt(Vector3.zero, flatLook.Unit)
-
-		local safeY = computeSafeTargetY(ifCoin, cframe.Position.Y, false)
-		local targetCFrame = CFrame.new(cframe.Position.X, safeY, cframe.Position.Z) * uprightRot
-
-		safeHold.active = true
-		safeHold.targetCFrame = targetCFrame
-
 		local handle = {}
-		local tween
 
-		local dist = (humanoidRootPart.Position - targetCFrame.Position).Magnitude
-		if dist > 0.05 then
-			safeHold.tweening = true
-			tween = tweenService:Create(
-				humanoidRootPart,
-				TweenInfo.new(math.max(duration, 0.01), Enum.EasingStyle.Linear),
-				{CFrame = targetCFrame}
-			)
-			tween.Completed:Connect(function()
-				if not cancelled then safeHold.tweening = false end
-			end)
-			tween:Play()
-		else
-			safeHold.tweening = false
-			humanoidRootPart.CFrame = targetCFrame
+		local adjustedCFrame = cframe
+		if ifCoin then
+			local rot = cframe - cframe.Position
+			local safeY = computeSafeTargetY(ifCoin, cframe.Position.Y)
+			adjustedCFrame = CFrame.new(cframe.Position.X, safeY, cframe.Position.Z) * rot
 		end
 
 		task.spawn(function()
-			if tween then tween.Completed:Wait() end
-			if cancelled then return end
+			if not tweenTo(adjustedCFrame, duration) then return end
 			if ifCoin then
 				coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
 			end
+			task.wait(0.1)
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
 			task.wait(settings["TweenDelay"])
-
 			if not cancelled then
-				restoreStandingPhysics()
+				local animator = humanoid:FindFirstChildOfClass("Animator")
+				if not animator then
+					local newAnim = Instance.new("Animator")
+					newAnim.Parent = humanoid
+				end
+				restorePhysics()
 			end
 		end)
 
 		function handle:Cancel()
 			cancelled = true
-			if tween then tween:Cancel() end
-			safeHold.targetCFrame = humanoidRootPart.CFrame
-			safeHold.tweening = false
+			if currentTween then currentTween:Cancel() end
+			if coinCFrame then
+				humanoidRootPart.CFrame = coinCFrame + Vector3.new(0, 3, 0)
+			end
+			restorePhysics()
 		end
 		return handle
 	elseif settings["Mode"] == "Safe" then
@@ -874,34 +805,22 @@ local function startFarmingLoop()
 							coinArrivalTime[coin] = nil
 							setStatus("STATUS: Coin stuck for 10s! Blacklisting...")
 						else
-							prepareTeleport(settings["Mode"])
-
-							local uprightRot
-							local desiredY
-							local safeY
-							if settings["Mode"] == "Safe" then
-								local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
-								if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-									currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
-									humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
-								end
-								uprightRot = currentRot
-								desiredY = coin.Position.Y - settings["SafeModeOffset"]
-								safeY = computeSafeTargetY(coin, desiredY, true)
-							else
-								local cf = humanoidRootPart.CFrame
-								local look = cf.LookVector
-								local flatLook = Vector3.new(look.X, 0, look.Z)
-								if flatLook.Magnitude < 0.01 then flatLook = Vector3.new(0, 0, -1) end
-								uprightRot = CFrame.lookAt(Vector3.zero, flatLook.Unit)
-								desiredY = coin.Position.Y
-								safeY = computeSafeTargetY(coin, desiredY, false)
+							disablePhysics(true)
+							local desiredY = coin.Position.Y - settings["SafeModeOffset"]
+							local safeY = computeSafeTargetY(coin, desiredY, true)
+							local targetPos = Vector3.new(
+								coin.Position.X,
+								safeY,
+								coin.Position.Z
+							)
+							local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
+							if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
+								currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
+								humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 							end
-
-							local targetPos = Vector3.new(coin.Position.X, safeY, coin.Position.Z)
 							safeHold.active = true
 							safeHold.tweening = false
-							safeHold.targetCFrame = CFrame.new(targetPos) * uprightRot
+							safeHold.targetCFrame = CFrame.new(targetPos) * currentRot
 							humanoidRootPart.CFrame = safeHold.targetCFrame
 
 							coinArrivalTime[coin] = coinArrivalTime[coin] or os.clock()
@@ -911,12 +830,6 @@ local function startFarmingLoop()
 								task.wait(0.1)
 								if targetCoin and targetCoin.Parent and targetCoin:FindFirstChild("TouchInterest") then
 									targetCoin.CFrame = humanoidRootPart.CFrame
-								end
-								if settings["Mode"] == "Standing" then
-									task.wait(settings["TweenDelay"])
-									if humanoidRootPart and humanoidRootPart.Parent then
-										restoreStandingPhysics()
-									end
 								end
 							end)
 						end
@@ -956,23 +869,25 @@ end
 startFarmingLoop()
 
 local function connectCharacter(newCharacter)
-	safeHold.active = false
-	safeHold.tweening = false
-	safeHold.targetCFrame = nil
-	character = newCharacter
-	humanoidRootPart = newCharacter:WaitForChild('HumanoidRootPart')
-	humanoid = newCharacter:WaitForChild('Humanoid')
-	lowerTorso = newCharacter:WaitForChild('LowerTorso')
-	upperTorso = newCharacter:WaitForChild('UpperTorso')
-	startPosition = humanoidRootPart.CFrame
+    safeHold.active = false
+    safeHold.tweening = false
+    safeHold.targetCFrame = nil
+    character = newCharacter
+    humanoidRootPart = newCharacter:WaitForChild('HumanoidRootPart')
+    humanoid = newCharacter:WaitForChild('Humanoid')
+    lowerTorso = newCharacter:WaitForChild('LowerTorso')
+    upperTorso = newCharacter:WaitForChild('UpperTorso')
+    startPosition = humanoidRootPart.CFrame
 
-	humanoid.Died:Connect(function()
-		if roundStarted then
-			farming = false
-			fullBag = true
-			alive = false
-		end
-	end)
+    physicsSettled = false
+
+    humanoid.Died:Connect(function()
+        if roundStarted then
+            farming = false
+            fullBag = true
+            alive = false
+        end
+    end)
 end
 
 player.CharacterAdded:Connect(connectCharacter)
@@ -1025,13 +940,13 @@ end)
 roundStart.OnClientEvent:Connect(function()
     detect()
     cachedCoinContainers = nil
-
     savedAnimations = nil
     roundCoins = 0
     roundStarted = true
     farming = true
     alive = true
     fullBag = false
+    physicsSettled = false
 
     if currentFarmHandle and currentFarmHandle.Cancel then
         pcall(function() currentFarmHandle:Cancel() end)
@@ -1057,7 +972,6 @@ roundEndFade.OnClientEvent:Connect(function()
     coinAttemptStart = setmetatable({}, {__mode = "k"})
     cachedCoinContainers = nil
 
-    -- Kill any active tween so we don't leave the character pinned mid-air
     if currentFarmHandle and currentFarmHandle.Cancel then
         pcall(function() currentFarmHandle:Cancel() end)
     end
@@ -1483,26 +1397,10 @@ if settings["UI"] == true then
 		SAFE.MouseLeave:Connect(function()
 			tweenService:Create(SAFE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
 		end)
-				SAFE.MouseButton1Click:Connect(function()
+		SAFE.MouseButton1Click:Connect(function()
 			settings["Mode"] = "Safe"
 			tweenService:Create(SAFE.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(75, 170, 0)}):Play()
 			tweenService:Create(STANDING.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(170, 0, 0)}):Play()
-			-- Safe mode wants to be flat → let the next grab flatten us.
-		end)
-
-		STANDING.MouseButton1Click:Connect(function()
-			settings["Mode"] = "Standing"
-			tweenService:Create(STANDING.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(75, 170, 0)}):Play()
-			tweenService:Create(SAFE.UIStroke, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {Color = Color3.fromRGB(170, 0, 0)}):Play()
-			if humanoidRootPart and humanoidRootPart.Parent then
-				safeHold.active = false
-				safeHold.tweening = false
-				safeHold.targetCFrame = nil
-				if math.abs(humanoidRootPart.CFrame.UpVector.Y) < 0.5 then
-					humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position)
-				end
-				restoreStandingPhysics()
-			end
 		end)
 		local uStroke2 = Instance.new('UIStroke', STANDING)
 		uStroke2.Thickness = 1.5
@@ -1808,7 +1706,7 @@ end
 
 task.spawn(function()
     while true do
-    	if settings["Mode"] == "Safe" and farming and not fullBag and roundStarted and character and humanoid and humanoid.Parent then
+        if farming and not fullBag and roundStarted and character and humanoid and humanoid.Parent then
             local animateScript = character:FindFirstChild("Animate")
             if animateScript and animateScript.Enabled then
                 animateScript.Enabled = false
