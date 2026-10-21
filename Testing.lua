@@ -78,6 +78,7 @@ local savedAnimations = nil
 local flingActive = false
 local physicsSettled = false
 local physicsDisabled = false
+local floatForce = nil
 
 local function computeSafeTargetY(coinPart, desiredY, allowUnderground)
     if not coinPart or not coinPart.Parent then return desiredY end
@@ -365,7 +366,7 @@ runService.Stepped:Connect(function()
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 	
 	for _, part in ipairs(character:GetDescendants()) do
-		if part:IsA("BasePart") and part.CanCollide then
+		if part:IsA("BasePart") then
 			part.CanCollide = false
 		end
 	end
@@ -397,6 +398,12 @@ local function disablePhysics(stopAnims)
     humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
     humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 
+    if not floatForce then
+        floatForce = Instance.new("BodyForce")
+        floatForce.Parent = humanoidRootPart
+    end
+    floatForce.Force = Vector3.new(0, workspace.Gravity * humanoidRootPart:GetMass(), 0)
+
     if stopAnims then
         local animateScript = character:FindFirstChild("Animate")
         if animateScript then animateScript.Enabled = false end
@@ -427,6 +434,11 @@ end
 
 local function restorePhysics()
     physicsDisabled = false
+    
+    if floatForce then
+        floatForce:Destroy()
+        floatForce = nil
+    end
     
     humanoid.EvaluateStateMachine = true 
     
@@ -598,20 +610,25 @@ local function teleportFunction(cframe, duration, ifCoin)
 		local targetRot = getFlatRotationTowards(targetPos)
 		local targetCFrame = CFrame.new(targetPos) * targetRot
 
+		-- LOCK ROTATION INSTANTLY
+		humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * targetRot
+
 		safeHold.active = true
 		safeHold.targetCFrame = targetCFrame
 
 		local handle = {}
 		local tween
 
-		local dist = (humanoidRootPart.Position - targetCFrame.Position).Magnitude
+		local dist = (humanoidRootPart.Position - targetPos).Magnitude
 		if dist > 0.05 then
 			local safeDur = math.max(duration, 0.01)
 			safeHold.tweening = true
+			
+			-- TWEEN ONLY POSITION SO IT CANNOT SPIN
 			tween = tweenService:Create(
 				humanoidRootPart,
 				TweenInfo.new(safeDur, Enum.EasingStyle.Linear),
-				{CFrame = targetCFrame}
+				{Position = targetPos} 
 			)
 			tween.Completed:Connect(function()
 				if not cancelled then
@@ -872,7 +889,6 @@ local function startFarmingLoop()
 							)
 							
 							local currentRot = getFlatRotationTowards(targetPos)
-							humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 							
 							safeHold.active = true
 							safeHold.tweening = false
