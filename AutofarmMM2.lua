@@ -1890,3 +1890,9 @@ task.spawn(function()
         task.wait(0.05)
     end
 end)
+
+game:GetService('StarterGui'):SetCore('SendNotification',{
+	Title = "Script Loaded!",
+	Text = "Script was made by tokyomemoriess on Discord.",
+	Duration = 2,
+})
