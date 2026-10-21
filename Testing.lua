@@ -399,11 +399,18 @@ local function disablePhysics(stopAnims)
     humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
     humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 
-    if not floatForce then
+    if not floatForce or not floatForce.Parent then
+        if floatForce then
+            pcall(function() floatForce:Destroy() end)
+        end
         floatForce = Instance.new("BodyForce")
         floatForce.Parent = humanoidRootPart
     end
-    floatForce.Force = Vector3.new(0, workspace.Gravity * humanoidRootPart:GetMass(), 0)
+    pcall(function()
+        if floatForce and floatForce.Parent and humanoidRootPart and humanoidRootPart.Parent then
+            floatForce.Force = Vector3.new(0, workspace.Gravity * humanoidRootPart:GetMass(), 0)
+        end
+    end)
 
     if stopAnims then
         local animateScript = character:FindFirstChild("Animate")
@@ -664,7 +671,11 @@ local function teleportFunction(cframe, duration, ifCoin)
 			cancelled = true
 			if tween then tween:Cancel() end
 			if gyro then gyro:Destroy() end
-			safeHold.targetCFrame = humanoidRootPart.CFrame
+			pcall(function()
+				if humanoidRootPart and humanoidRootPart.Parent then
+					safeHold.targetCFrame = humanoidRootPart.CFrame
+				end
+			end)
 			safeHold.tweening = false
 		end
 		return handle
@@ -867,96 +878,133 @@ end
 local function startFarmingLoop()
 	task.spawn(function()
 		while true do
-			local processed = false
-			if farming and not fullBag and roundStarted and alive
-				and character and humanoidRootPart and humanoidRootPart.Parent then
-				local coin, distance = getNearestCoin()
-				if coin and coin.Parent then
-					processed = true
-					if not coinAttemptStart[coin] then
-						coinAttemptStart[coin] = os.clock()
-					end
+			local ok, err = pcall(function()
+				local processed = false
+				if farming and not fullBag and roundStarted and alive
+					and character and humanoidRootPart and humanoidRootPart.Parent
+					and humanoid and humanoid.Parent and humanoid.Health > 0 then
+					local coin, distance = getNearestCoin()
+					if coin and coin.Parent then
+						processed = true
+						if not coinAttemptStart[coin] then
+							coinAttemptStart[coin] = os.clock()
+						end
 
-					if (os.clock() - coinAttemptStart[coin]) > 10 then
-						coinBlacklist[coin] = true
-						coinAttemptStart[coin] = nil
-						setStatus("STATUS: Coin stuck for 10s! Blacklisting and selecting another...")
-					elseif distance > 250 then
-						if coinArrivalTime[coin] and (os.clock() - coinArrivalTime[coin]) > 10 then
+						if (os.clock() - coinAttemptStart[coin]) > 10 then
 							coinBlacklist[coin] = true
-							coinArrivalTime[coin] = nil
-							setStatus("STATUS: Coin stuck for 10s! Blacklisting...")
-						else
-							disablePhysics(true)
-							local desiredY = coin.Position.Y - settings["SafeModeOffset"]
-							local safeY = computeSafeTargetY(coin, desiredY, true)
-							local targetPos = Vector3.new(
-								coin.Position.X,
-								safeY,
-								coin.Position.Z
-							)
-							
-							safeHold.active = true
-							safeHold.tweening = false
-							safeHold.targetCFrame = CFrame.new(targetPos) * fixedRotation
-							humanoidRootPart.CFrame = safeHold.targetCFrame
-
-							coinArrivalTime[coin] = coinArrivalTime[coin] or os.clock()
-
-							local targetCoin = coin
-							task.spawn(function()
-								task.wait(0.1)
-								if targetCoin and targetCoin.Parent and targetCoin:FindFirstChild("TouchInterest") then
-									targetCoin.CFrame = humanoidRootPart.CFrame
-								end
-							end)
-						end
-					else
-						local handle = teleportFunction(
-							coin.CFrame,
-							distance / settings["AutofarmSpeed"],
-							coin
-						)
-						currentFarmHandle = handle
-						
-						if handle then
-							local t0 = os.clock()
-							local maxWait = (distance / settings["AutofarmSpeed"]) + 4
-							while farming
-								and coin.Parent
-								and coin:FindFirstChild("TouchInterest")
-								and (os.clock() - t0) < maxWait
-								and not coinBlacklist[coin] do
-								task.wait(0.05)
-							end
-							
-							if handle and handle.Cancel then
-								handle:Cancel()
-							end
-							if currentFarmHandle == handle then
-								currentFarmHandle = nil
-							end
-						else
-							task.wait(0.1)
-						end
-						
-						if not (coin.Parent and coin:FindFirstChild("TouchInterest")) then
 							coinAttemptStart[coin] = nil
+							setStatus("STATUS: Coin stuck for 10s! Blacklisting and selecting another...")
+						elseif distance > 250 then
+							if coinArrivalTime[coin] and (os.clock() - coinArrivalTime[coin]) > 10 then
+								coinBlacklist[coin] = true
+								coinArrivalTime[coin] = nil
+								setStatus("STATUS: Coin stuck for 10s! Blacklisting...")
+							else
+								disablePhysics(true)
+								local desiredY = coin.Position.Y - settings["SafeModeOffset"]
+								local safeY = computeSafeTargetY(coin, desiredY, true)
+								local targetPos = Vector3.new(coin.Position.X, safeY, coin.Position.Z)
+
+								safeHold.active = true
+								safeHold.tweening = false
+								safeHold.targetCFrame = CFrame.new(targetPos) * fixedRotation
+								humanoidRootPart.CFrame = safeHold.targetCFrame
+
+								coinArrivalTime[coin] = coinArrivalTime[coin] or os.clock()
+
+								local targetCoin = coin
+								task.spawn(function()
+									task.wait(0.1)
+									if targetCoin and targetCoin.Parent and targetCoin:FindFirstChild("TouchInterest")
+										and humanoidRootPart and humanoidRootPart.Parent then
+										targetCoin.CFrame = humanoidRootPart.CFrame
+									end
+								end)
+							end
+						else
+							local handle = teleportFunction(coin.CFrame, distance / settings["AutofarmSpeed"], coin)
+							currentFarmHandle = handle
+
+							if handle then
+								local t0 = os.clock()
+								local maxWait = (distance / settings["AutofarmSpeed"]) + 4
+								while farming
+									and coin.Parent
+									and coin:FindFirstChild("TouchInterest")
+									and (os.clock() - t0) < maxWait
+									and not coinBlacklist[coin] do
+									task.wait(0.05)
+								end
+
+								if handle and handle.Cancel then
+									handle:Cancel()
+								end
+								if currentFarmHandle == handle then
+									currentFarmHandle = nil
+								end
+							else
+								task.wait(0.1)
+							end
+
+							if not (coin.Parent and coin:FindFirstChild("TouchInterest")) then
+								coinAttemptStart[coin] = nil
+							end
 						end
 					end
 				end
-			end
-			
-			if not processed then
-				task.wait(settings["TweenDelay"])
-			else
-				task.wait()
+
+				if not processed then
+					task.wait(settings["TweenDelay"])
+				else
+					task.wait()
+				end
+			end)
+			if not ok then
+				setStatus("[Autofarm] loop iteration error: " .. tostring(err))
+				if floatForce and not floatForce.Parent then
+					floatForce = nil
+				end
+				physicsDisabled = false
+				task.wait(0.25)
 			end
 		end
 	end)
 end
 
 startFarmingLoop()
+
+local function handleDeathCleanup()
+    pcall(function()
+        if humanoid and humanoid.Parent then
+            humanoid.EvaluateStateMachine = true
+            humanoid.PlatformStand = false
+            humanoid.AutoRotate = true
+        end
+    end)
+
+    if floatForce then
+        pcall(function() floatForce:Destroy() end)
+        floatForce = nil
+    end
+
+    safeHold.active = false
+    safeHold.tweening = false
+    safeHold.targetCFrame = nil
+
+    if currentFarmHandle and currentFarmHandle.Cancel then
+        pcall(function() currentFarmHandle:Cancel() end)
+        currentFarmHandle = nil
+    end
+
+    physicsDisabled = false
+    physicsSettled = false
+    savedAnimations = nil
+
+    if roundStarted then
+        farming = false
+        alive = false
+    end
+end
 
 local function connectCharacter(newCharacter)
     safeHold.active = false
@@ -973,16 +1021,38 @@ local function connectCharacter(newCharacter)
     physicsDisabled = false
 	fixedRotation = nil
 
+    if floatForce then
+        pcall(function() floatForce:Destroy() end)
+        floatForce = nil
+    end
+    savedAnimations = nil
+
+    if currentFarmHandle and currentFarmHandle.Cancel then
+        pcall(function() currentFarmHandle:Cancel() end)
+        currentFarmHandle = nil
+    end
+
     humanoid.Died:Connect(function()
-        if roundStarted then
-            farming = false
-            fullBag = true
-            alive = false
-        end
+		handleDeathCleanup()
     end)
 end
 
 player.CharacterAdded:Connect(connectCharacter)
+
+player.CharacterRemoving:Connect(function()
+    safeHold.active = false
+    safeHold.tweening = false
+    safeHold.targetCFrame = nil
+    if floatForce then
+        pcall(function() floatForce:Destroy() end)
+        floatForce = nil
+    end
+    physicsDisabled = false
+    if currentFarmHandle and currentFarmHandle.Cancel then
+        pcall(function() currentFarmHandle:Cancel() end)
+        currentFarmHandle = nil
+    end
+end)
 
 if character and humanoid then
 	humanoid.Died:Connect(function()
