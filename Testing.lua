@@ -610,8 +610,14 @@ local function teleportFunction(cframe, duration, ifCoin)
 		local targetRot = getFlatRotationTowards(targetPos)
 		local targetCFrame = CFrame.new(targetPos) * targetRot
 
-		-- LOCK ROTATION INSTANTLY
 		humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * targetRot
+
+		local gyro = Instance.new("BodyGyro")
+		gyro.Parent = humanoidRootPart
+		gyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+		gyro.D = 0
+		gyro.P = 10000
+		gyro.CFrame = targetCFrame
 
 		safeHold.active = true
 		safeHold.targetCFrame = targetCFrame
@@ -624,7 +630,6 @@ local function teleportFunction(cframe, duration, ifCoin)
 			local safeDur = math.max(duration, 0.01)
 			safeHold.tweening = true
 			
-			-- TWEEN ONLY POSITION SO IT CANNOT SPIN
 			tween = tweenService:Create(
 				humanoidRootPart,
 				TweenInfo.new(safeDur, Enum.EasingStyle.Linear),
@@ -643,6 +648,9 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		task.spawn(function()
 			if tween then tween.Completed:Wait() end
+			
+			if gyro then gyro:Destroy() end 
+			
 			if cancelled then return end
 			if ifCoin then
 				coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
@@ -656,6 +664,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 		function handle:Cancel()
 			cancelled = true
 			if tween then tween:Cancel() end
+			if gyro then gyro:Destroy() end
 			safeHold.targetCFrame = humanoidRootPart.CFrame
 			safeHold.tweening = false
 		end
