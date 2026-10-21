@@ -453,14 +453,20 @@ end
 local function enterTunnelIfNeeded(targetY)
     if physicsSettled then return end
     if not (humanoidRootPart and humanoidRootPart.Parent) then return end
-
+    
     physicsSettled = true
-
     task.wait()
-
     if not (humanoidRootPart and humanoidRootPart.Parent) then return end
-
-    local rot = getStableFlatRotation()
+    
+    local look = humanoidRootPart.CFrame.LookVector
+    local flatLook = Vector3.new(look.X, 0, look.Z)
+    if flatLook.Magnitude < 0.01 then
+        flatLook = Vector3.new(0, 0, -1)
+    else
+        flatLook = flatLook.Unit
+    end
+    local rot = CFrame.lookAt(Vector3.zero, flatLook) * CFrame.Angles(math.pi / 2, 0, 0)
+    
     humanoidRootPart.CFrame = CFrame.new(
         humanoidRootPart.Position.X,
         targetY,
@@ -508,6 +514,10 @@ local function teleportFunction(cframe, duration, ifCoin)
 		if coinArrivalTime[ifCoin] == nil then
 			coinArrivalTime[ifCoin] = os.clock()
 		end
+		
+		safeHold.targetCFrame = humanoidRootPart.CFrame 
+		safeHold.tweening = false
+		
 		return nil
 	end
 
@@ -588,7 +598,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 			safeHold.tweening = true
 			tween = tweenService:Create(
 				humanoidRootPart,
-				TweenInfo.new(duration, Enum.EasingStyle.Linear),
+				TweenInfo.new(safeDur, Enum.EasingStyle.Linear),
 				{CFrame = targetCFrame}
 			)
 			tween.Completed:Connect(function()
@@ -874,21 +884,28 @@ local function startFarmingLoop()
 							coin
 						)
 						currentFarmHandle = handle
-						local t0 = os.clock()
-						local maxWait = (distance / settings["AutofarmSpeed"]) + 4
-						while farming
-							and coin.Parent
-							and coin:FindFirstChild("TouchInterest")
-							and (os.clock() - t0) < maxWait
-							and not coinBlacklist[coin] do
-							task.wait(0.05)
+						
+						if handle then
+							local t0 = os.clock()
+							local maxWait = (distance / settings["AutofarmSpeed"]) + 4
+							while farming
+								and coin.Parent
+								and coin:FindFirstChild("TouchInterest")
+								and (os.clock() - t0) < maxWait
+								and not coinBlacklist[coin] do
+								task.wait(0.05)
+							end
+							
+							if handle and handle.Cancel then
+								handle:Cancel()
+							end
+							if currentFarmHandle == handle then
+								currentFarmHandle = nil
+							end
+						else
+							task.wait(0.1)
 						end
-						if handle and handle.Cancel then
-							handle:Cancel()
-						end
-						if currentFarmHandle == handle then
-							currentFarmHandle = nil
-						end
+						
 						if not (coin.Parent and coin:FindFirstChild("TouchInterest")) then
 							coinAttemptStart[coin] = nil
 						end
@@ -919,6 +936,7 @@ local function connectCharacter(newCharacter)
     startPosition = humanoidRootPart.CFrame
 
     physicsSettled = false
+    physicsDisabled = false
 
     humanoid.Died:Connect(function()
         if roundStarted then
@@ -986,6 +1004,7 @@ roundStart.OnClientEvent:Connect(function()
     alive = true
     fullBag = false
     physicsSettled = false
+    physicsDisabled = false
 
     if currentFarmHandle and currentFarmHandle.Cancel then
         pcall(function() currentFarmHandle:Cancel() end)
@@ -1018,6 +1037,8 @@ roundEndFade.OnClientEvent:Connect(function()
     safeHold.active = false
     safeHold.tweening = false
     safeHold.targetCFrame = nil
+
+	physicsDisabled = false
 
     if roundStarted then
         setStatus("STATUS: Waiting for round to start.")
