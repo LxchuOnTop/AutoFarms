@@ -411,26 +411,6 @@ local function disablePhysics(stopAnims)
     end
 end
 
-local function enterTunnelIfNeeded(targetY)
-    if physicsSettled then return end
-    if not (humanoidRootPart and humanoidRootPart.Parent) then return end
-
-    physicsSettled = true
-
-    task.wait()
-
-    if not (humanoidRootPart and humanoidRootPart.Parent) then return end
-
-    local rot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
-    humanoidRootPart.CFrame = CFrame.new(
-        humanoidRootPart.Position.X,
-        targetY,
-        humanoidRootPart.Position.Z
-    ) * rot
-    humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-    humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-end
-
 local function restorePhysics()
     for _, descendant in ipairs(character:GetDescendants()) do
         if descendant:IsA("BasePart") then
@@ -450,6 +430,38 @@ local function restorePhysics()
     humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 
     physicsSettled = false
+end
+
+local function getStableFlatRotation()
+	local look = humanoidRootPart.CFrame.LookVector
+	local flatLook = Vector3.new(look.X, 0, look.Z)
+	if flatLook.Magnitude < 0.01 then
+		flatLook = Vector3.new(0, 0, -1)
+	else
+		flatLook = flatLook.Unit
+	end
+
+	return CFrame.lookAt(Vector3.zero, flatLook) * CFrame.Angles(math.pi / 2, 0, 0)
+end
+
+local function enterTunnelIfNeeded(targetY)
+    if physicsSettled then return end
+    if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+
+    physicsSettled = true
+
+    task.wait()
+
+    if not (humanoidRootPart and humanoidRootPart.Parent) then return end
+
+    local rot = getStableFlatRotation()
+    humanoidRootPart.CFrame = CFrame.new(
+        humanoidRootPart.Position.X,
+        targetY,
+        humanoidRootPart.Position.Z
+    ) * rot
+    humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+    humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 end
 
 local function teleportFunction(cframe, duration, ifCoin)
@@ -541,11 +553,8 @@ local function teleportFunction(cframe, duration, ifCoin)
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 
-		local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
-		if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-			currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
-			humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
-		end
+		local currentRot = getStableFlatRotation()
+		humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
 
 		if not physicsSettled then
 			local tunnelY = (ifCoin and ifCoin.Position.Y or cframe.Position.Y) - settings["SafeModeOffset"]
@@ -832,11 +841,14 @@ local function startFarmingLoop()
 								safeY,
 								coin.Position.Z
 							)
-							local currentRot = humanoidRootPart.CFrame - humanoidRootPart.CFrame.Position
-							if math.abs(humanoidRootPart.CFrame.UpVector.Y) > 0.5 then
-								currentRot = currentRot * CFrame.Angles(math.pi / 2, 0, 0)
-								humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
-							end
+							
+							local currentRot = getStableFlatRotation()
+							humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * currentRot
+							
+							safeHold.active = true
+							safeHold.tweening = false
+							safeHold.targetCFrame = CFrame.new(targetPos) * currentRot
+							humanoidRootPart.CFrame = safeHold.targetCFrame
 							safeHold.active = true
 							safeHold.tweening = false
 							safeHold.targetCFrame = CFrame.new(targetPos) * currentRot
