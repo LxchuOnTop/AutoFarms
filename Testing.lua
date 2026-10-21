@@ -79,6 +79,7 @@ local flingActive = false
 local physicsSettled = false
 local physicsDisabled = false
 local floatForce = nil
+local fixedRotation = nil
 
 local function computeSafeTargetY(coinPart, desiredY, allowUnderground)
     if not coinPart or not coinPart.Parent then return desiredY end
@@ -489,13 +490,14 @@ local function enterTunnelIfNeeded(targetY)
     else
         flatLook = flatLook.Unit
     end
-    local rot = CFrame.lookAt(Vector3.zero, flatLook) * CFrame.Angles(math.pi / 2, 0, 0)
+    
+    fixedRotation = CFrame.lookAt(Vector3.zero, flatLook) * CFrame.Angles(math.pi / 2, 0, 0)
     
     humanoidRootPart.CFrame = CFrame.new(
         humanoidRootPart.Position.X,
         targetY,
         humanoidRootPart.Position.Z
-    ) * rot
+    ) * fixedRotation
     humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
     humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
 end
@@ -589,7 +591,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 			restorePhysics()
 		end
 		return handle
-	elseif settings["Mode"] == "Safe" then
+		elseif settings["Mode"] == "Safe" then
 		disablePhysics(true)
 		setStatus("STATUS: Going for another coin.")
 
@@ -607,10 +609,9 @@ local function teleportFunction(cframe, duration, ifCoin)
 			cframe.Position.Z
 		)
 		
-		local targetRot = getFlatRotationTowards(targetPos)
-		local targetCFrame = CFrame.new(targetPos) * targetRot
+		local targetCFrame = CFrame.new(targetPos) * fixedRotation
 
-		humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * targetRot
+		humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * fixedRotation
 
 		local gyro = Instance.new("BodyGyro")
 		gyro.Parent = humanoidRootPart
@@ -648,9 +649,7 @@ local function teleportFunction(cframe, duration, ifCoin)
 
 		task.spawn(function()
 			if tween then tween.Completed:Wait() end
-			
-			if gyro then gyro:Destroy() end 
-			
+			if gyro then gyro:Destroy() end
 			if cancelled then return end
 			if ifCoin then
 				coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
@@ -897,11 +896,9 @@ local function startFarmingLoop()
 								coin.Position.Z
 							)
 							
-							local currentRot = getFlatRotationTowards(targetPos)
-							
 							safeHold.active = true
 							safeHold.tweening = false
-							safeHold.targetCFrame = CFrame.new(targetPos) * currentRot
+							safeHold.targetCFrame = CFrame.new(targetPos) * fixedRotation
 							humanoidRootPart.CFrame = safeHold.targetCFrame
 
 							coinArrivalTime[coin] = coinArrivalTime[coin] or os.clock()
@@ -974,6 +971,7 @@ local function connectCharacter(newCharacter)
 
     physicsSettled = false
     physicsDisabled = false
+	fixedRotation = nil
 
     humanoid.Died:Connect(function()
         if roundStarted then
@@ -1048,6 +1046,8 @@ roundStart.OnClientEvent:Connect(function()
     end
     currentFarmHandle = nil
 
+	fixedRotation = nil
+
     safeHold.active = false
     safeHold.tweening = false
     safeHold.targetCFrame = nil
@@ -1071,6 +1071,7 @@ roundEndFade.OnClientEvent:Connect(function()
         pcall(function() currentFarmHandle:Cancel() end)
     end
     currentFarmHandle = nil
+	fixedRotation = nil
     safeHold.active = false
     safeHold.tweening = false
     safeHold.targetCFrame = nil
