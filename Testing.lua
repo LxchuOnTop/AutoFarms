@@ -360,8 +360,16 @@ local safeHold = {
 runService.Stepped:Connect(function()
 	if not safeHold.active then return end
 	if not humanoidRootPart or not humanoidRootPart.Parent then return end
+	
 	humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
 	humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+	
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") and part.CanCollide then
+			part.CanCollide = false
+		end
+	end
+	
 	if not safeHold.tweening and safeHold.targetCFrame then
 		humanoidRootPart.CFrame = safeHold.targetCFrame
 	end
@@ -370,6 +378,8 @@ end)
 local function disablePhysics(stopAnims)
     if physicsDisabled then return end
     physicsDisabled = true
+    
+    humanoid.EvaluateStateMachine = false
     
     for _, descendant in ipairs(character:GetDescendants()) do
         if descendant:IsA("BasePart") then
@@ -417,6 +427,8 @@ end
 
 local function restorePhysics()
     physicsDisabled = false
+    
+    humanoid.EvaluateStateMachine = true 
     
     for _, descendant in ipairs(character:GetDescendants()) do
         if descendant:IsA("BasePart") then
