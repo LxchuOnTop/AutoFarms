@@ -17,32 +17,39 @@ local settings = {
 
 local players = game:GetService("Players")
 
+local function watchPart(part)
+    part.CanCollide = false
+    part:GetPropertyChangedSignal("CanCollide"):Connect(function()
+        if part.CanCollide then
+            part.CanCollide = false
+        end
+    end)
+end
+
 local function setCharacterCollision(character)
-	for _, part in ipairs(character:GetDescendants()) do
-		if part:IsA("BasePart") then
-			part.CanCollide = false
-		end
-	end
-	character.DescendantAdded:Connect(function(part)
-		if part:IsA("BasePart") then
-			part.CanCollide = false
-		end
-	end)
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            watchPart(part)
+        end
+    end
+    character.DescendantAdded:Connect(function(part)
+        if part:IsA("BasePart") then
+            watchPart(part)
+        end
+    end)
 end
 
 local function onPlayerAdded(player)
-	if player ~= players.LocalPlayer then
-		player.CharacterAdded:Connect(function(character)
-			setCharacterCollision(character)
-		end)
-		if player.Character then
-			setCharacterCollision(player.Character)
-		end
-	end
+    if player ~= players.LocalPlayer then
+        player.CharacterAdded:Connect(setCharacterCollision)
+        if player.Character then
+            setCharacterCollision(player.Character)
+        end
+    end
 end
 
 for _, player in ipairs(players:GetPlayers()) do
-	onPlayerAdded(player)
+    onPlayerAdded(player)
 end
 
 players.PlayerAdded:Connect(onPlayerAdded)
