@@ -2036,6 +2036,91 @@ if settings["UI"] == true then
 		TokyoUI.IgnoreGuiInset = true
 		TokyoUI.Parent = player:WaitForChild("PlayerGui")
 
+		local SoundService = game:GetService("SoundService")
+		
+		local notifSound = Instance.new("Sound")
+		notifSound.SoundId = "rbxassetid://4590662766"
+		notifSound.Volume = 0.15
+		notifSound.Parent = SoundService
+
+		local NotifContainer = Instance.new("Frame")
+		NotifContainer.Name = "NotifContainer"
+		NotifContainer.AnchorPoint = Vector2.new(1, 0)
+		NotifContainer.Position = UDim2.new(1, -20, 0, 20)
+		NotifContainer.Size = UDim2.new(0, 260, 1, -40)
+		NotifContainer.BackgroundTransparency = 1
+		NotifContainer.Parent = TokyoUI
+
+		local NotifLayout = Instance.new("UIListLayout")
+		NotifLayout.Padding = UDim.new(0, 8)
+		NotifLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		NotifLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+		NotifLayout.Parent = NotifContainer
+
+		_G.Notify = function(title, text)
+			if notifSound then
+				notifSound:Play()
+			end
+
+			local notif = Instance.new("Frame")
+			notif.Size = UDim2.new(1, 0, 0, 52)
+			notif.BackgroundColor3 = COLORS.elevated
+			notif.BackgroundTransparency = 1
+			notif.Position = UDim2.new(1, 280, 0, 0)
+			notif.Parent = NotifContainer
+			corner(notif, 8); stroke(notif, COLORS.border, 1)
+
+			local accent = Instance.new("Frame")
+			accent.Size = UDim2.new(0, 4, 1, -12)
+			accent.Position = UDim2.new(0, 6, 0, 6)
+			accent.BackgroundColor3 = COLORS.accent
+			accent.BorderSizePixel = 0
+			accent.Parent = notif
+			corner(accent, 4)
+
+			local titleLbl = Instance.new("TextLabel")
+			titleLbl.Size = UDim2.new(1, -24, 0, 18)
+			titleLbl.Position = UDim2.new(0, 16, 0, 8)
+			titleLbl.BackgroundTransparency = 1
+			titleLbl.Font = FONT_BOLD
+			titleLbl.Text = title
+			titleLbl.TextColor3 = COLORS.text
+			titleLbl.TextSize = 12
+			titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+			titleLbl.Parent = notif
+
+			local textLbl = Instance.new("TextLabel")
+			textLbl.Size = UDim2.new(1, -24, 0, 16)
+			textLbl.Position = UDim2.new(0, 16, 0, 26)
+			textLbl.BackgroundTransparency = 1
+			textLbl.Font = FONT
+			textLbl.Text = text
+			textLbl.TextColor3 = COLORS.textDim
+			textLbl.TextSize = 11
+			textLbl.TextXAlignment = Enum.TextXAlignment.Left
+			textLbl.TextTruncate = Enum.TextTruncate.AtEnd
+			textLbl.Parent = notif
+
+			tweenService:Create(notif, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+				Position = UDim2.new(0, 0, 0, 0),
+				BackgroundTransparency = 0
+			}):Play()
+
+			task.delay(3.5, function()
+				if notif and notif.Parent then
+					local tweenOut = tweenService:Create(notif, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+						Position = UDim2.new(1, 280, 0, 0),
+						BackgroundTransparency = 1
+					})
+					tweenOut:Play()
+					tweenOut.Completed:Connect(function()
+						notif:Destroy()
+					end)
+				end
+			end)
+		end
+
 		local UI = Instance.new("Frame")
 		UI.Name = "UI"
 		UI.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -2238,7 +2323,7 @@ if settings["UI"] == true then
 			tweenService:Create(Tab1Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
 		end)
 
-		local function createInput(parent, key, labelText, isNumeric, clampRange, order)
+				local function createInput(parent, key, labelText, isNumeric, clampRange, order)
 			local row = Instance.new("Frame")
 			row.Size = UDim2.new(1, 0, 0, H_ROW)
 			row.BackgroundColor3 = COLORS.elevated
@@ -2273,17 +2358,20 @@ if settings["UI"] == true then
 			corner(inp, 4); stroke(inp, COLORS.border, 1)
 
 			inp.FocusLost:Connect(function()
+				local oldVal = tostring(settings[key])
 				if isNumeric then
 					local n = tonumber(inp.Text)
 					if n then
 						if clampRange then n = math.clamp(n, clampRange[1], clampRange[2]) end
 						settings[key] = n
 						inp.Text = tostring(n)
+						if tostring(n) ~= oldVal then _G.Notify("Setting Updated", labelText .. " set to " .. tostring(n)) end
 					else
 						inp.Text = tostring(settings[key])
 					end
 				else
 					settings[key] = inp.Text
+					if inp.Text ~= oldVal then _G.Notify("Setting Updated", labelText .. " set to " .. inp.Text) end
 				end
 			end)
 			return row
@@ -2331,6 +2419,7 @@ if settings["UI"] == true then
 				tweenService:Create(btn, TweenInfo.new(0.15), {
 					BackgroundColor3 = state and COLORS.green or COLORS.textDim
 				}):Play()
+				_G.Notify("Toggled", labelText .. ": " .. (state and "ON" or "OFF"))
 			end)
 			return row
 		end
@@ -2381,13 +2470,16 @@ if settings["UI"] == true then
 				buttons[opt] = btn
 
 				btn.MouseButton1Click:Connect(function()
-					settings[key] = opt
-					for o, b in pairs(buttons) do
-						local active = (o == opt)
-						tweenService:Create(b, TweenInfo.new(0.15), {
-							BackgroundColor3 = active and COLORS.accent or COLORS.panel,
-							TextColor3 = active and COLORS.text or COLORS.textDim,
-						}):Play()
+					if settings[key] ~= opt then
+						settings[key] = opt
+						for o, b in pairs(buttons) do
+							local active = (o == opt)
+							tweenService:Create(b, TweenInfo.new(0.15), {
+								BackgroundColor3 = active and COLORS.accent or COLORS.panel,
+								TextColor3 = active and COLORS.text or COLORS.textDim,
+							}):Play()
+						end
+						_G.Notify("Mode Changed", labelText .. " set to " .. opt)
 					end
 				end)
 			end
@@ -2413,7 +2505,10 @@ if settings["UI"] == true then
 			btn.MouseLeave:Connect(function()
 				tweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = color or COLORS.accent}):Play()
 			end)
-			btn.MouseButton1Click:Connect(onClick)
+			btn.MouseButton1Click:Connect(function()
+				_G.Notify("Action", "Executing " .. labelText)
+				onClick()
+			end)
 			return btn
 		end
 
@@ -2499,12 +2594,6 @@ task.spawn(function()
         task.wait(0.05)
     end
 end)
-
-game:GetService('StarterGui'):SetCore('SendNotification',{
-	Title = "Script Loaded!",
-	Text = "Script was made by tokyomemoriess on Discord.",
-	Duration = 2,
-})
 
 local TeleportService = game:GetService("TeleportService")
 local HttpService     = game:GetService("HttpService")
@@ -2721,5 +2810,18 @@ task.spawn(function()
         else
             lowSince = nil
         end
+    end
+end)
+
+task.spawn(function()
+    task.wait(1.5)
+    if _G.Notify then
+        _G.Notify("Script Loaded!", "Made by tokyomemoriess on Discord.")
+    else
+        game:GetService('StarterGui'):SetCore('SendNotification',{
+            Title = "Script Loaded!",
+            Text = "Script was made by tokyomemoriess on Discord.",
+            Duration = 2,
+        })
     end
 end)
