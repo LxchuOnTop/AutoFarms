@@ -1196,7 +1196,7 @@ coinCollected.OnClientEvent:Connect(function(coinType, current, max)
 				totalLabel.Text = "TOTAL COIN COLLECTED: " .. totalCollected
 			end
 			setStatus("STATUS: Collected Coin! Current Collected: " .. roundCoins .. "/" .. max)
-		elseif settings["UIMode"] == 2 then
+		elseif settings["UIMode"] == 2 or settings["UIMode"] == 3 then
 			setStatus("STATUS: Collected Coin! Current Collected: " .. roundCoins .. "/" .. max)
 		end
 	end
@@ -2427,12 +2427,20 @@ if settings["UI"] == true then
 		createInput(Tab02,  "HopLowCountDuration",    "Low Count Duration (s)", true, {1, 120}, 6)
 		createToggle(Tab02, "HopMidRound",            "Allow Hop Mid-Round",    7)
 		createButton(Tab02, "⚡ HOP NOW", COLORS.accent, function()
-			if _G._tokyoServerHop then
-				_G._tokyoServerHop("Manual user request")
-			else
+			if not _G._tokyoServerHop then
 				setStatus("[AutoHop] Server-hop module not loaded yet")
+				return
 			end
+			local saved = settings["ServerHopEnabled"]
+			settings["ServerHopEnabled"] = true
+			_G._tokyoServerHop("Manual user request")
+			settings["ServerHopEnabled"] = saved
 		end, 8)
+		createButton(Tab02, "♻ Reset Hop Counter", COLORS.elevated, function()
+			hopState.attempts = 0
+			saveHopState(hopState)
+			setStatus("[AutoHop] Attempt counter reset")
+		end, 9)
 
 		local dragging, dragStart, startPos = false, nil, nil
 		local function beginDrag(input)
@@ -2629,8 +2637,7 @@ local function serverHop(reason)
 
     hopping = true
     hopState.attempts = hopState.attempts + 1
-    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s")
-        :format(hopState.attempts, MAX_HOP_ATTEMPTS, tostring(reason)))
+    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s"):format(hopState.attempts, maxAttempts, tostring(reason)))
 
     local wasFarming = farming
     if wasFarming ~= nil then farming = false end
@@ -2656,8 +2663,9 @@ local function serverHop(reason)
         if wasFarming ~= nil then farming = wasFarming end
         hopping = false
     end
-	_G._tokyoServerHop = serverHop
 end
+
+_G._tokyoServerHop = serverHop
 
 if queue_on_teleport and getgenv().TokyoFarmSourceURL then
     pcall(function()
