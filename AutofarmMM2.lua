@@ -2862,7 +2862,7 @@ local function saveSettings()
 end
 
 task.spawn(function()
-    task.wait(1.5)
+    task.wait(3)
     if _G.Notify then
         _G.Notify("Script Loaded!", "Made by tokyomemoriess on Discord.")
     else
@@ -2872,4 +2872,5 @@ task.spawn(function()
             Duration = 2,
         })
     end
+	game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Extras"):WaitForChild("ChangeLastDevice"):FireServer("Phone")
 end)
