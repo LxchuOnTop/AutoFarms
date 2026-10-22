@@ -11,7 +11,7 @@ local settings = {
 	["ShootMurdererIfDone"] = false,
 	["KillEveryoneIfDone"] = false,
 	["UI"] = true,
-	["UIMode"] = 2,
+	["UIMode"] = 3,
 	["FullyOptimizeWhileGrinding"] = false,
 	["ServerHopEnabled"] = true,
 	["MaxHopAttempts"] = 10,
@@ -181,6 +181,9 @@ local function getStatusLabel()
 	if settings["UIMode"] == 1 then
 		root = root:FindFirstChild('UI')
 		if root then root = root:FindFirstChild('Interface') end
+	elseif settings["UIMode"] == 3 then
+		root = root:FindFirstChild('TokyoUI')
+		if root then root = root:FindFirstChild('UI') end
 	else
 		root = root:FindFirstChild('Lxchu')
 		if root then root = root:FindFirstChild('UI') end
@@ -1982,6 +1985,480 @@ if settings["UI"] == true then
 		userInputService.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				odhDragging = false
+			end
+		end)
+	elseif settings["UIMode"] == 3 then
+		local COLORS = {
+			bg          = Color3.fromRGB(10, 10, 14),
+			panel       = Color3.fromRGB(18, 18, 24),
+			elevated    = Color3.fromRGB(26, 26, 34),
+			border      = Color3.fromRGB(42, 42, 53),
+			text        = Color3.fromRGB(240, 240, 245),
+			textDim     = Color3.fromRGB(138, 138, 154),
+			accent      = Color3.fromRGB(124, 92, 255),
+			accentLight = Color3.fromRGB(158, 132, 255),
+			green       = Color3.fromRGB(74, 222, 128),
+			red         = Color3.fromRGB(248, 113, 113),
+		}
+		local FONT      = Enum.Font.GothamMedium
+		local FONT_BOLD = Enum.Font.GothamBold
+
+		local function corner(p, r)
+			local c = Instance.new("UICorner")
+			c.CornerRadius = UDim.new(0, r or 8)
+			c.Parent = p
+			return c
+		end
+		local function stroke(p, col, th)
+			local s = Instance.new("UIStroke")
+			s.Color = col or COLORS.border
+			s.Thickness = th or 1
+			s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			s.Parent = p
+			return s
+		end
+
+		local TokyoUI = Instance.new("ScreenGui")
+		TokyoUI.Name = "TokyoUI"
+		TokyoUI.ResetOnSpawn = false
+		TokyoUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		TokyoUI.IgnoreGuiInset = true
+		TokyoUI.Parent = player:WaitForChild("PlayerGui")
+
+		local UI = Instance.new("Frame")
+		UI.Name = "UI"
+		UI.AnchorPoint = Vector2.new(0.5, 0.5)
+		UI.Position = UDim2.new(0.5, 0, 0.5, 0)
+		if userInputService.TouchEnabled then
+			UI.Size = UDim2.new(0.92, 0, 0, 500)
+		else
+			UI.Size = UDim2.new(0, 540, 0, 500)
+		end
+		UI.BackgroundColor3 = COLORS.bg
+		UI.BorderSizePixel = 0
+		UI.ClipsDescendants = true
+		UI.Active = true
+		UI.Parent = TokyoUI
+		corner(UI, 14)
+		stroke(UI, COLORS.border, 1)
+
+		local TitleBar = Instance.new("Frame")
+		TitleBar.Name = "TitleBar"
+		TitleBar.Size = UDim2.new(1, 0, 0, 56)
+		TitleBar.BackgroundColor3 = COLORS.panel
+		TitleBar.BorderSizePixel = 0
+		TitleBar.Parent = UI
+
+		local TitleGrad = Instance.new("UIGradient")
+		TitleGrad.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, COLORS.panel),
+			ColorSequenceKeypoint.new(1, COLORS.elevated),
+		})
+		TitleGrad.Rotation = 0
+		TitleGrad.Parent = TitleBar
+
+		local TitleDot = Instance.new("Frame")
+		TitleDot.Size = UDim2.new(0, 8, 0, 8)
+		TitleDot.Position = UDim2.new(0, 18, 0.5, -4)
+		TitleDot.BackgroundColor3 = COLORS.accent
+		TitleDot.BorderSizePixel = 0
+		TitleDot.Parent = TitleBar
+		corner(TitleDot, 4)
+
+		local Title = Instance.new("TextLabel")
+		Title.Name = "Title"
+		Title.Size = UDim2.new(1, -120, 0, 22)
+		Title.Position = UDim2.new(0, 36, 0.5, -22)
+		Title.BackgroundTransparency = 1
+		Title.Font = FONT_BOLD
+		Title.Text = "TOKYO AUTOFARM"
+		Title.TextColor3 = COLORS.text
+		Title.TextSize = 16
+		Title.TextXAlignment = Enum.TextXAlignment.Left
+		Title.Parent = TitleBar
+
+		local Subtitle = Instance.new("TextLabel")
+		Subtitle.Size = UDim2.new(1, -120, 0, 16)
+		Subtitle.Position = UDim2.new(0, 36, 0.5, 2)
+		Subtitle.BackgroundTransparency = 1
+		Subtitle.Font = FONT
+		Subtitle.Text = "Reworked Edition • v3"
+		Subtitle.TextColor3 = COLORS.textDim
+		Subtitle.TextSize = 11
+		Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+		Subtitle.Parent = TitleBar
+
+		local CLOSE = Instance.new("TextButton")
+		CLOSE.Name = "CLOSE"
+		CLOSE.Size = UDim2.new(0, 32, 0, 32)
+		CLOSE.Position = UDim2.new(1, -44, 0.5, -16)
+		CLOSE.BackgroundColor3 = COLORS.elevated
+		CLOSE.BorderSizePixel = 0
+		CLOSE.Font = FONT_BOLD
+		CLOSE.Text = "✕"
+		CLOSE.TextColor3 = COLORS.red
+		CLOSE.TextSize = 14
+		CLOSE.AutoButtonColor = false
+		CLOSE.Parent = TitleBar
+		corner(CLOSE, 8)
+		stroke(CLOSE, COLORS.border, 1)
+
+		local TOGGLE = Instance.new("TextButton")
+		TOGGLE.Name = "TOGGLE"
+		TOGGLE.AnchorPoint = Vector2.new(0.5, 0.5)
+		TOGGLE.Position = UDim2.new(0.88, 0, 0.85, 0)
+		TOGGLE.Size = UDim2.new(0, 52, 0, 52)
+		TOGGLE.BackgroundColor3 = COLORS.panel
+		TOGGLE.BorderSizePixel = 0
+		TOGGLE.Font = FONT_BOLD
+		TOGGLE.Text = "T"
+		TOGGLE.TextColor3 = COLORS.accent
+		TOGGLE.TextSize = 20
+		TOGGLE.AutoButtonColor = false
+		TOGGLE.Visible = false
+		TOGGLE.Parent = TokyoUI
+		corner(TOGGLE, 26)
+		stroke(TOGGLE, COLORS.accent, 2)
+
+		CLOSE.MouseEnter:Connect(function()
+			tweenService:Create(CLOSE, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.red, TextColor3 = COLORS.text}):Play()
+		end)
+		CLOSE.MouseLeave:Connect(function()
+			tweenService:Create(CLOSE, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.red}):Play()
+		end)
+		CLOSE.MouseButton1Click:Connect(function()
+			UI.Visible = false
+			TOGGLE.Visible = true
+		end)
+		TOGGLE.MouseButton1Click:Connect(function()
+			UI.Visible = true
+			TOGGLE.Visible = false
+		end)
+
+		local TabBar = Instance.new("Frame")
+		TabBar.Name = "TabBar"
+		TabBar.Size = UDim2.new(1, 0, 0, 44)
+		TabBar.Position = UDim2.new(0, 0, 0, 56)
+		TabBar.BackgroundColor3 = COLORS.bg
+		TabBar.BorderSizePixel = 0
+		TabBar.Parent = UI
+
+		local TabDivider = Instance.new("Frame")
+		TabDivider.Size = UDim2.new(1, -32, 0, 1)
+		TabDivider.Position = UDim2.new(0, 16, 1, -1)
+		TabDivider.BackgroundColor3 = COLORS.border
+		TabDivider.BorderSizePixel = 0
+		TabDivider.Parent = TabBar
+
+		local Tab1Btn = Instance.new("TextButton")
+		Tab1Btn.Name = "Tab1Btn"
+		Tab1Btn.Size = UDim2.new(0, 120, 0, 32)
+		Tab1Btn.Position = UDim2.new(0, 16, 0, 6)
+		Tab1Btn.BackgroundColor3 = COLORS.accent
+		Tab1Btn.BorderSizePixel = 0
+		Tab1Btn.Font = FONT_BOLD
+		Tab1Btn.Text = "FARM"
+		Tab1Btn.TextColor3 = COLORS.text
+		Tab1Btn.TextSize = 12
+		Tab1Btn.AutoButtonColor = false
+		Tab1Btn.Parent = TabBar
+		corner(Tab1Btn, 8)
+
+		local Tab2Btn = Instance.new("TextButton")
+		Tab2Btn.Name = "Tab2Btn"
+		Tab2Btn.Size = UDim2.new(0, 140, 0, 32)
+		Tab2Btn.Position = UDim2.new(0, 144, 0, 6)
+		Tab2Btn.BackgroundColor3 = COLORS.elevated
+		Tab2Btn.BorderSizePixel = 0
+		Tab2Btn.Font = FONT_BOLD
+		Tab2Btn.Text = "SERVER HOP"
+		Tab2Btn.TextColor3 = COLORS.textDim
+		Tab2Btn.TextSize = 12
+		Tab2Btn.AutoButtonColor = false
+		Tab2Btn.Parent = TabBar
+		corner(Tab2Btn, 8)
+
+		local Content = Instance.new("Frame")
+		Content.Name = "Content"
+		Content.Size = UDim2.new(1, 0, 1, -132)
+		Content.Position = UDim2.new(0, 0, 0, 100)
+		Content.BackgroundTransparency = 1
+		Content.Parent = UI
+
+		local STATUS = Instance.new("TextLabel")
+		STATUS.Name = "STATUS"
+		STATUS.Size = UDim2.new(1, 0, 0, 32)
+		STATUS.Position = UDim2.new(0, 0, 1, -32)
+		STATUS.BackgroundColor3 = COLORS.panel
+		STATUS.BorderSizePixel = 0
+		STATUS.Font = FONT
+		STATUS.Text = "STATUS: NIL"
+		STATUS.TextColor3 = COLORS.textDim
+		STATUS.TextSize = 12
+		STATUS.Parent = UI
+
+		local function makeTab(name)
+			local tab = Instance.new("ScrollingFrame")
+			tab.Name = name
+			tab.Size = UDim2.new(1, -24, 1, -16)
+			tab.Position = UDim2.new(0, 12, 0, 8)
+			tab.BackgroundTransparency = 1
+			tab.BorderSizePixel = 0
+			tab.ScrollBarThickness = 4
+			tab.ScrollBarImageColor3 = COLORS.border
+			tab.CanvasSize = UDim2.new(0, 0, 0, 0)
+			tab.AutomaticCanvasSize = Enum.AutomaticSize.Y
+			tab.Parent = Content
+			local layout = Instance.new("UIListLayout")
+			layout.Padding = UDim.new(0, 6)
+			layout.SortOrder = Enum.SortOrder.LayoutOrder
+			layout.Parent = tab
+			return tab
+		end
+
+		local Tab01 = makeTab("Tab01")
+		local Tab02 = makeTab("Tab02")
+		Tab02.Visible = false
+
+		Tab1Btn.MouseButton1Click:Connect(function()
+			Tab01.Visible = true; Tab02.Visible = false
+			tweenService:Create(Tab1Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accent,  TextColor3 = COLORS.text}):Play()
+			tweenService:Create(Tab2Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
+		end)
+		Tab2Btn.MouseButton1Click:Connect(function()
+			Tab01.Visible = false; Tab02.Visible = true
+			tweenService:Create(Tab2Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accent,  TextColor3 = COLORS.text}):Play()
+			tweenService:Create(Tab1Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
+		end)
+
+		local function createInput(parent, key, labelText, isNumeric, clampRange, order)
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, 0, 0, 42)
+			row.BackgroundColor3 = COLORS.elevated
+			row.BorderSizePixel = 0
+			row.LayoutOrder = order or 0
+			row.Parent = parent
+			corner(row, 8); stroke(row, COLORS.border, 1)
+
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.new(0.55, -14, 1, 0)
+			lbl.Position = UDim2.new(0, 14, 0, 0)
+			lbl.BackgroundTransparency = 1
+			lbl.Font = FONT
+			lbl.Text = labelText
+			lbl.TextColor3 = COLORS.text
+			lbl.TextSize = 13
+			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.Parent = row
+
+			local inp = Instance.new("TextBox")
+			inp.Size = UDim2.new(0.45, -24, 1, -14)
+			inp.Position = UDim2.new(0.55, 10, 0, 7)
+			inp.BackgroundColor3 = COLORS.panel
+			inp.BorderSizePixel = 0
+			inp.Font = FONT_BOLD
+			inp.Text = tostring(settings[key] or "")
+			inp.TextColor3 = COLORS.accentLight
+			inp.TextSize = 13
+			inp.ClearTextOnFocus = false
+			inp.Parent = row
+			corner(inp, 6); stroke(inp, COLORS.border, 1)
+
+			inp.FocusLost:Connect(function()
+				if isNumeric then
+					local n = tonumber(inp.Text)
+					if n then
+						if clampRange then n = math.clamp(n, clampRange[1], clampRange[2]) end
+						settings[key] = n
+						inp.Text = tostring(n)
+					else
+						inp.Text = tostring(settings[key])
+					end
+				else
+					settings[key] = inp.Text
+				end
+			end)
+			return row
+		end
+
+		local function createToggle(parent, key, labelText, order)
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, 0, 0, 42)
+			row.BackgroundColor3 = COLORS.elevated
+			row.BorderSizePixel = 0
+			row.LayoutOrder = order or 0
+			row.Parent = parent
+			corner(row, 8); stroke(row, COLORS.border, 1)
+
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.new(1, -80, 1, 0)
+			lbl.Position = UDim2.new(0, 14, 0, 0)
+			lbl.BackgroundTransparency = 1
+			lbl.Font = FONT
+			lbl.Text = labelText
+			lbl.TextColor3 = COLORS.text
+			lbl.TextSize = 13
+			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.Parent = row
+
+			local state = settings[key] and true or false
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(0, 46, 0, 22)
+			btn.Position = UDim2.new(1, -60, 0.5, -11)
+			btn.BackgroundColor3 = state and COLORS.green or COLORS.textDim
+			btn.BorderSizePixel = 0
+			btn.Font = FONT_BOLD
+			btn.Text = state and "ON" or "OFF"
+			btn.TextColor3 = COLORS.bg
+			btn.TextSize = 10
+			btn.AutoButtonColor = false
+			btn.Parent = row
+			corner(btn, 11)
+
+			btn.MouseButton1Click:Connect(function()
+				state = not state
+				settings[key] = state
+				btn.Text = state and "ON" or "OFF"
+				tweenService:Create(btn, TweenInfo.new(0.15), {
+					BackgroundColor3 = state and COLORS.green or COLORS.textDim
+				}):Play()
+			end)
+			return row
+		end
+
+		local function createSegment(parent, key, labelText, options, order)
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, 0, 0, 42)
+			row.BackgroundColor3 = COLORS.elevated
+			row.BorderSizePixel = 0
+			row.LayoutOrder = order or 0
+			row.Parent = parent
+			corner(row, 8); stroke(row, COLORS.border, 1)
+
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.new(0.4, -14, 1, 0)
+			lbl.Position = UDim2.new(0, 14, 0, 0)
+			lbl.BackgroundTransparency = 1
+			lbl.Font = FONT
+			lbl.Text = labelText
+			lbl.TextColor3 = COLORS.text
+			lbl.TextSize = 13
+			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.Parent = row
+
+			local container = Instance.new("Frame")
+			container.Size = UDim2.new(0.6, -24, 1, -14)
+			container.Position = UDim2.new(0.4, 10, 0, 7)
+			container.BackgroundColor3 = COLORS.panel
+			container.BorderSizePixel = 0
+			container.Parent = row
+			corner(container, 6); stroke(container, COLORS.border, 1)
+
+			local bw = 1 / #options
+			local buttons = {}
+			for i, opt in ipairs(options) do
+				local btn = Instance.new("TextButton")
+				btn.Size = UDim2.new(bw, -6, 1, -6)
+				btn.Position = UDim2.new((i-1) * bw, 3, 0, 3)
+				btn.BackgroundColor3 = (settings[key] == opt) and COLORS.accent or COLORS.panel
+				btn.BorderSizePixel = 0
+				btn.Font = FONT_BOLD
+				btn.Text = opt
+				btn.TextColor3 = (settings[key] == opt) and COLORS.text or COLORS.textDim
+				btn.TextSize = 11
+				btn.AutoButtonColor = false
+				btn.Parent = container
+				corner(btn, 4)
+				buttons[opt] = btn
+
+				btn.MouseButton1Click:Connect(function()
+					settings[key] = opt
+					for o, b in pairs(buttons) do
+						local active = (o == opt)
+						tweenService:Create(b, TweenInfo.new(0.15), {
+							BackgroundColor3 = active and COLORS.accent or COLORS.panel,
+							TextColor3 = active and COLORS.text or COLORS.textDim,
+						}):Play()
+					end
+				end)
+			end
+			return row
+		end
+
+		local function createButton(parent, labelText, color, onClick, order)
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(1, 0, 0, 42)
+			btn.BackgroundColor3 = color or COLORS.accent
+			btn.BorderSizePixel = 0
+			btn.Font = FONT_BOLD
+			btn.Text = labelText
+			btn.TextColor3 = COLORS.text
+			btn.TextSize = 13
+			btn.AutoButtonColor = false
+			btn.LayoutOrder = order or 0
+			btn.Parent = parent
+			corner(btn, 8)
+			btn.MouseEnter:Connect(function()
+				tweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accentLight}):Play()
+			end)
+			btn.MouseLeave:Connect(function()
+				tweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = color or COLORS.accent}):Play()
+			end)
+			btn.MouseButton1Click:Connect(onClick)
+			return btn
+		end
+
+		createInput(Tab01,   "AutofarmSpeed",         "Autofarm Speed",         true,  {1, 500}, 1)
+		createInput(Tab01,   "TweenDelay",            "Tween Delay",            true,  {0.01, 5}, 2)
+		createInput(Tab01,   "CoinAuraDistance",      "Coin Aura Distance",     true,  {0, 50},  3)
+		createInput(Tab01,   "CoinType",              "Coin Type",              false, nil,      4)
+		createInput(Tab01,   "SafeModeOffset",        "Safe Mode Offset",       true,  {0, 30},  5)
+		createSegment(Tab01, "Mode",                  "Mode",                   {"Safe", "Standing"}, 6)
+		createToggle(Tab01,  "KillEveryoneIfDone",    "Kill All When Done",     7)
+		createToggle(Tab01,  "ShootMurdererIfDone",   "Fling Murderer When Done", 8)
+		createToggle(Tab01,  "ResetIfDone",           "Reset When Done",        9)
+		createToggle(Tab01,  "FullyOptimizeWhileGrinding", "Fully Optimize",    10)
+
+		createToggle(Tab02, "ServerHopEnabled",       "Server Hop Enabled",     1)
+		createInput(Tab02,  "MaxHopAttempts",         "Max Hop Attempts",       true, {1, 100}, 2)
+		createInput(Tab02,  "MinPlayerCount",         "Min Player Count",       true, {1, 20},  3)
+		createInput(Tab02,  "HopCheckInterval",       "Check Interval (s)",     true, {1, 60},  4)
+		createInput(Tab02,  "HopGracePeriod",         "Grace Period (s)",       true, {1, 120}, 5)
+		createInput(Tab02,  "HopLowCountDuration",    "Low Count Duration (s)", true, {1, 120}, 6)
+		createToggle(Tab02, "HopMidRound",            "Allow Hop Mid-Round",    7)
+		createButton(Tab02, "⚡ HOP NOW", COLORS.accent, function()
+			if _G._tokyoServerHop then
+				_G._tokyoServerHop("Manual user request")
+			else
+				setStatus("[AutoHop] Server-hop module not loaded yet")
+			end
+		end, 8)
+
+		local dragging, dragStart, startPos = false, nil, nil
+		local function beginDrag(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				dragStart = input.Position
+				startPos = UI.Position
+			end
+		end
+		TitleBar.InputBegan:Connect(beginDrag)
+		Title.InputBegan:Connect(beginDrag)
+		Subtitle.InputBegan:Connect(beginDrag)
+
+		userInputService.InputChanged:Connect(function(input)
+			if not dragging then return end
+			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+				local delta = input.Position - dragStart
+				UI.Position = UDim2.new(
+					startPos.X.Scale, startPos.X.Offset + delta.X,
+					startPos.Y.Scale, startPos.Y.Offset + delta.Y
+				)
+			end
+		end)
+		userInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
 			end
 		end)
 	end
