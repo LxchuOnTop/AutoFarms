@@ -1,5 +1,7 @@
 -- Scripted by TokyoMemoriess
 
+local SETTINGS_FILE = "TokyoFarm_Settings.json"
+
 local settings = {
 	["Mode"] = "Safe",
 	["AutofarmSpeed"] = 27.5,
@@ -116,6 +118,7 @@ local runService = game:GetService('RunService')
 local tweenService = game:GetService("TweenService")
 local virtualUser = game:GetService("VirtualUser")
 local userInputService = game:GetService("UserInputService")
+local httpService = game:GetService("HttpService")
 
 local remotes = replicatedStorage:WaitForChild('Remotes')
 local gameplay = remotes:WaitForChild('Gameplay')
@@ -137,6 +140,25 @@ local physicsSettled = false
 local physicsDisabled = false
 local floatForce = nil
 local fixedRotation = nil
+
+if isfile and isfile(SETTINGS_FILE) then
+	pcall(function()
+		local saved = httpService:JSONDecode(readfile(SETTINGS_FILE))
+		for k, v in pairs(saved) do
+			if settings[k] ~= nil then
+				settings[k] = v
+			end
+		end
+	end)
+end
+
+local function saveSettings()
+	if writefile then
+		pcall(function()
+			writefile(SETTINGS_FILE, httpService:JSONEncode(settings))
+		end)
+	end
+end
 
 local function computeSafeTargetY(coinPart, desiredY, allowUnderground)
     if not coinPart or not coinPart.Parent then return desiredY end
@@ -2365,13 +2387,19 @@ if settings["UI"] == true then
 						if clampRange then n = math.clamp(n, clampRange[1], clampRange[2]) end
 						settings[key] = n
 						inp.Text = tostring(n)
-						if tostring(n) ~= oldVal then _G.Notify("Setting Updated", labelText .. " set to " .. tostring(n)) end
+						if tostring(n) ~= oldVal then 
+							_G.Notify("Setting Updated", labelText .. " set to " .. tostring(n)) 
+							saveSettings()
+						end
 					else
 						inp.Text = tostring(settings[key])
 					end
 				else
 					settings[key] = inp.Text
-					if inp.Text ~= oldVal then _G.Notify("Setting Updated", labelText .. " set to " .. inp.Text) end
+					if inp.Text ~= oldVal then 
+						_G.Notify("Setting Updated", labelText .. " set to " .. inp.Text) 
+						saveSettings()
+					end
 				end
 			end)
 			return row
@@ -2420,6 +2448,7 @@ if settings["UI"] == true then
 					BackgroundColor3 = state and COLORS.green or COLORS.textDim
 				}):Play()
 				_G.Notify("Toggled", labelText .. ": " .. (state and "ON" or "OFF"))
+				saveSettings()
 			end)
 			return row
 		end
@@ -2480,6 +2509,7 @@ if settings["UI"] == true then
 							}):Play()
 						end
 						_G.Notify("Mode Changed", labelText .. " set to " .. opt)
+						saveSettings()
 					end
 				end)
 			end
@@ -2596,7 +2626,6 @@ task.spawn(function()
 end)
 
 local TeleportService = game:GetService("TeleportService")
-local HttpService     = game:GetService("HttpService")
 
 local HOP_STATE_FILE     = settings["HopStateFile"] or "TokyoFarm_HopState.json"
 local HOP_STATE_MAX_JOBS = 100
@@ -2606,7 +2635,7 @@ local function loadHopState()
 
     if isfile and isfile(HOP_STATE_FILE) then
         pcall(function()
-            local data = HttpService:JSONDecode(readfile(HOP_STATE_FILE))
+            local data = httpService:JSONDecode(readfile(HOP_STATE_FILE))
             if type(data) ~= "table" then return end
             state.attempts = tonumber(data.attempts) or 0
 
@@ -2637,7 +2666,7 @@ end
 local function saveHopState(state)
     if not writefile then return end
     pcall(function()
-        writefile(HOP_STATE_FILE, HttpService:JSONEncode(state))
+        writefile(HOP_STATE_FILE, httpService:JSONEncode(state))
     end)
 end
 
@@ -2674,7 +2703,7 @@ local function httpGetJson(url)
     end
 
     if not body then return nil end
-    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+    local ok, data = pcall(httpService.JSONDecode, httpService, body)
     if not ok or type(data) ~= "table" then return nil end
     return data
 end
@@ -2812,6 +2841,25 @@ task.spawn(function()
         end
     end
 end)
+
+if isfile and isfile(SETTINGS_FILE) then
+	pcall(function()
+		local saved = httpService:JSONDecode(readfile(SETTINGS_FILE))
+		for k, v in pairs(saved) do
+			if settings[k] ~= nil then
+				settings[k] = v
+			end
+		end
+	end)
+end
+
+local function saveSettings()
+	if writefile then
+		pcall(function()
+			writefile(SETTINGS_FILE, httpService:JSONEncode(settings))
+		end)
+	end
+end
 
 task.spawn(function()
     task.wait(1.5)
