@@ -2314,6 +2314,7 @@ if settings["UI"] == true then
 		local function makeTab(name)
 			local tab = Instance.new("ScrollingFrame")
 			tab.Name = name
+			tab.ScrollBarImageTransparency = 1
 			tab.Size = UDim2.new(1, -14, 1, -10)
 			tab.Position = UDim2.new(0, 7, 0, 5)
 			tab.BackgroundTransparency = 1
