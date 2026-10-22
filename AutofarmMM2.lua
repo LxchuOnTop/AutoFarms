@@ -2183,7 +2183,7 @@ if settings["UI"] == true then
 		Title.Position = UDim2.new(0, 28, 0.5, -19)
 		Title.BackgroundTransparency = 1
 		Title.Font = FONT_BOLD
-		Title.Text = "TOKYO AUTOFARM"
+		Title.Text = "TokyoMemoriess's Auto Farm"
 		Title.TextColor3 = COLORS.text
 		Title.TextSize = 13
 		Title.TextXAlignment = Enum.TextXAlignment.Left
