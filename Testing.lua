@@ -2003,9 +2003,14 @@ if settings["UI"] == true then
 		local FONT      = Enum.Font.GothamMedium
 		local FONT_BOLD = Enum.Font.GothamBold
 
+		local H_TITLE   = 44
+		local H_TABBAR  = 34
+		local H_STATUS  = 26
+		local H_ROW     = 34
+
 		local function corner(p, r)
 			local c = Instance.new("UICorner")
-			c.CornerRadius = UDim.new(0, r or 8)
+			c.CornerRadius = UDim.new(0, r or 6)
 			c.Parent = p
 			return c
 		end
@@ -2029,22 +2034,23 @@ if settings["UI"] == true then
 		UI.Name = "UI"
 		UI.AnchorPoint = Vector2.new(0.5, 0.5)
 		UI.Position = UDim2.new(0.5, 0, 0.5, 0)
-		if userInputService.TouchEnabled then
-			UI.Size = UDim2.new(0.92, 0, 0, 500)
-		else
-			UI.Size = UDim2.new(0, 540, 0, 500)
-		end
+		UI.Size = UDim2.new(0.85, 0, 0.7, 0)
 		UI.BackgroundColor3 = COLORS.bg
 		UI.BorderSizePixel = 0
 		UI.ClipsDescendants = true
 		UI.Active = true
 		UI.Parent = TokyoUI
-		corner(UI, 14)
+		corner(UI, 12)
 		stroke(UI, COLORS.border, 1)
+
+		local sizeConstraint = Instance.new("UISizeConstraint")
+		sizeConstraint.MaxSize = Vector2.new(420, 380)
+		sizeConstraint.MinSize = Vector2.new(280, 300)
+		sizeConstraint.Parent = UI
 
 		local TitleBar = Instance.new("Frame")
 		TitleBar.Name = "TitleBar"
-		TitleBar.Size = UDim2.new(1, 0, 0, 56)
+		TitleBar.Size = UDim2.new(1, 0, 0, H_TITLE)
 		TitleBar.BackgroundColor3 = COLORS.panel
 		TitleBar.BorderSizePixel = 0
 		TitleBar.Parent = UI
@@ -2054,12 +2060,11 @@ if settings["UI"] == true then
 			ColorSequenceKeypoint.new(0, COLORS.panel),
 			ColorSequenceKeypoint.new(1, COLORS.elevated),
 		})
-		TitleGrad.Rotation = 0
 		TitleGrad.Parent = TitleBar
 
 		local TitleDot = Instance.new("Frame")
-		TitleDot.Size = UDim2.new(0, 8, 0, 8)
-		TitleDot.Position = UDim2.new(0, 18, 0.5, -4)
+		TitleDot.Size = UDim2.new(0, 7, 0, 7)
+		TitleDot.Position = UDim2.new(0, 14, 0.5, -3)
 		TitleDot.BackgroundColor3 = COLORS.accent
 		TitleDot.BorderSizePixel = 0
 		TitleDot.Parent = TitleBar
@@ -2067,57 +2072,57 @@ if settings["UI"] == true then
 
 		local Title = Instance.new("TextLabel")
 		Title.Name = "Title"
-		Title.Size = UDim2.new(1, -120, 0, 22)
-		Title.Position = UDim2.new(0, 36, 0.5, -22)
+		Title.Size = UDim2.new(1, -100, 0, 18)
+		Title.Position = UDim2.new(0, 28, 0.5, -19)
 		Title.BackgroundTransparency = 1
 		Title.Font = FONT_BOLD
 		Title.Text = "TOKYO AUTOFARM"
 		Title.TextColor3 = COLORS.text
-		Title.TextSize = 16
+		Title.TextSize = 13
 		Title.TextXAlignment = Enum.TextXAlignment.Left
 		Title.Parent = TitleBar
 
 		local Subtitle = Instance.new("TextLabel")
-		Subtitle.Size = UDim2.new(1, -120, 0, 16)
-		Subtitle.Position = UDim2.new(0, 36, 0.5, 2)
+		Subtitle.Size = UDim2.new(1, -100, 0, 14)
+		Subtitle.Position = UDim2.new(0, 28, 0.5, 1)
 		Subtitle.BackgroundTransparency = 1
 		Subtitle.Font = FONT
-		Subtitle.Text = "Reworked Edition • v3"
+		Subtitle.Text = "Reworked • v3"
 		Subtitle.TextColor3 = COLORS.textDim
-		Subtitle.TextSize = 11
+		Subtitle.TextSize = 9
 		Subtitle.TextXAlignment = Enum.TextXAlignment.Left
 		Subtitle.Parent = TitleBar
 
 		local CLOSE = Instance.new("TextButton")
 		CLOSE.Name = "CLOSE"
-		CLOSE.Size = UDim2.new(0, 32, 0, 32)
-		CLOSE.Position = UDim2.new(1, -44, 0.5, -16)
+		CLOSE.Size = UDim2.new(0, 26, 0, 26)
+		CLOSE.Position = UDim2.new(1, -34, 0.5, -13)
 		CLOSE.BackgroundColor3 = COLORS.elevated
 		CLOSE.BorderSizePixel = 0
 		CLOSE.Font = FONT_BOLD
 		CLOSE.Text = "✕"
 		CLOSE.TextColor3 = COLORS.red
-		CLOSE.TextSize = 14
+		CLOSE.TextSize = 12
 		CLOSE.AutoButtonColor = false
 		CLOSE.Parent = TitleBar
-		corner(CLOSE, 8)
+		corner(CLOSE, 6)
 		stroke(CLOSE, COLORS.border, 1)
 
 		local TOGGLE = Instance.new("TextButton")
 		TOGGLE.Name = "TOGGLE"
 		TOGGLE.AnchorPoint = Vector2.new(0.5, 0.5)
-		TOGGLE.Position = UDim2.new(0.88, 0, 0.85, 0)
-		TOGGLE.Size = UDim2.new(0, 52, 0, 52)
+		TOGGLE.Position = UDim2.new(0.9, 0, 0.88, 0)
+		TOGGLE.Size = UDim2.new(0, 44, 0, 44)
 		TOGGLE.BackgroundColor3 = COLORS.panel
 		TOGGLE.BorderSizePixel = 0
 		TOGGLE.Font = FONT_BOLD
 		TOGGLE.Text = "T"
 		TOGGLE.TextColor3 = COLORS.accent
-		TOGGLE.TextSize = 20
+		TOGGLE.TextSize = 17
 		TOGGLE.AutoButtonColor = false
 		TOGGLE.Visible = false
 		TOGGLE.Parent = TokyoUI
-		corner(TOGGLE, 26)
+		corner(TOGGLE, 22)
 		stroke(TOGGLE, COLORS.accent, 2)
 
 		CLOSE.MouseEnter:Connect(function()
@@ -2137,80 +2142,82 @@ if settings["UI"] == true then
 
 		local TabBar = Instance.new("Frame")
 		TabBar.Name = "TabBar"
-		TabBar.Size = UDim2.new(1, 0, 0, 44)
-		TabBar.Position = UDim2.new(0, 0, 0, 56)
+		TabBar.Size = UDim2.new(1, 0, 0, H_TABBAR)
+		TabBar.Position = UDim2.new(0, 0, 0, H_TITLE)
 		TabBar.BackgroundColor3 = COLORS.bg
 		TabBar.BorderSizePixel = 0
 		TabBar.Parent = UI
 
 		local TabDivider = Instance.new("Frame")
-		TabDivider.Size = UDim2.new(1, -32, 0, 1)
-		TabDivider.Position = UDim2.new(0, 16, 1, -1)
+		TabDivider.Size = UDim2.new(1, -20, 0, 1)
+		TabDivider.Position = UDim2.new(0, 10, 1, -1)
 		TabDivider.BackgroundColor3 = COLORS.border
 		TabDivider.BorderSizePixel = 0
 		TabDivider.Parent = TabBar
 
 		local Tab1Btn = Instance.new("TextButton")
 		Tab1Btn.Name = "Tab1Btn"
-		Tab1Btn.Size = UDim2.new(0, 120, 0, 32)
-		Tab1Btn.Position = UDim2.new(0, 16, 0, 6)
+		Tab1Btn.Size = UDim2.new(0, 96, 0, 26)
+		Tab1Btn.Position = UDim2.new(0, 10, 0, 4)
 		Tab1Btn.BackgroundColor3 = COLORS.accent
 		Tab1Btn.BorderSizePixel = 0
 		Tab1Btn.Font = FONT_BOLD
 		Tab1Btn.Text = "FARM"
 		Tab1Btn.TextColor3 = COLORS.text
-		Tab1Btn.TextSize = 12
+		Tab1Btn.TextSize = 11
 		Tab1Btn.AutoButtonColor = false
 		Tab1Btn.Parent = TabBar
-		corner(Tab1Btn, 8)
+		corner(Tab1Btn, 6)
 
 		local Tab2Btn = Instance.new("TextButton")
 		Tab2Btn.Name = "Tab2Btn"
-		Tab2Btn.Size = UDim2.new(0, 140, 0, 32)
-		Tab2Btn.Position = UDim2.new(0, 144, 0, 6)
+		Tab2Btn.Size = UDim2.new(0, 116, 0, 26)
+		Tab2Btn.Position = UDim2.new(0, 112, 0, 4)
 		Tab2Btn.BackgroundColor3 = COLORS.elevated
 		Tab2Btn.BorderSizePixel = 0
 		Tab2Btn.Font = FONT_BOLD
 		Tab2Btn.Text = "SERVER HOP"
 		Tab2Btn.TextColor3 = COLORS.textDim
-		Tab2Btn.TextSize = 12
+		Tab2Btn.TextSize = 11
 		Tab2Btn.AutoButtonColor = false
 		Tab2Btn.Parent = TabBar
-		corner(Tab2Btn, 8)
+		corner(Tab2Btn, 6)
 
 		local Content = Instance.new("Frame")
 		Content.Name = "Content"
-		Content.Size = UDim2.new(1, 0, 1, -132)
-		Content.Position = UDim2.new(0, 0, 0, 100)
+		Content.Size = UDim2.new(1, 0, 1, -(H_TITLE + H_TABBAR + H_STATUS))
+		Content.Position = UDim2.new(0, 0, 0, H_TITLE + H_TABBAR)
 		Content.BackgroundTransparency = 1
 		Content.Parent = UI
 
 		local STATUS = Instance.new("TextLabel")
 		STATUS.Name = "STATUS"
-		STATUS.Size = UDim2.new(1, 0, 0, 32)
-		STATUS.Position = UDim2.new(0, 0, 1, -32)
+		STATUS.Size = UDim2.new(1, 0, 0, H_STATUS)
+		STATUS.Position = UDim2.new(0, 0, 1, -H_STATUS)
 		STATUS.BackgroundColor3 = COLORS.panel
 		STATUS.BorderSizePixel = 0
 		STATUS.Font = FONT
 		STATUS.Text = "STATUS: NIL"
 		STATUS.TextColor3 = COLORS.textDim
-		STATUS.TextSize = 12
+		STATUS.TextSize = 10
+		STATUS.TextXAlignment = Enum.TextXAlignment.Left
+		STATUS.TextTruncate = Enum.TextTruncate.AtEnd
 		STATUS.Parent = UI
 
 		local function makeTab(name)
 			local tab = Instance.new("ScrollingFrame")
 			tab.Name = name
-			tab.Size = UDim2.new(1, -24, 1, -16)
-			tab.Position = UDim2.new(0, 12, 0, 8)
+			tab.Size = UDim2.new(1, -14, 1, -10)
+			tab.Position = UDim2.new(0, 7, 0, 5)
 			tab.BackgroundTransparency = 1
 			tab.BorderSizePixel = 0
-			tab.ScrollBarThickness = 4
+			tab.ScrollBarThickness = 3
 			tab.ScrollBarImageColor3 = COLORS.border
 			tab.CanvasSize = UDim2.new(0, 0, 0, 0)
 			tab.AutomaticCanvasSize = Enum.AutomaticSize.Y
 			tab.Parent = Content
 			local layout = Instance.new("UIListLayout")
-			layout.Padding = UDim.new(0, 6)
+			layout.Padding = UDim.new(0, 4)
 			layout.SortOrder = Enum.SortOrder.LayoutOrder
 			layout.Parent = tab
 			return tab
@@ -2233,36 +2240,37 @@ if settings["UI"] == true then
 
 		local function createInput(parent, key, labelText, isNumeric, clampRange, order)
 			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, 0, 0, 42)
+			row.Size = UDim2.new(1, 0, 0, H_ROW)
 			row.BackgroundColor3 = COLORS.elevated
 			row.BorderSizePixel = 0
 			row.LayoutOrder = order or 0
 			row.Parent = parent
-			corner(row, 8); stroke(row, COLORS.border, 1)
+			corner(row, 6); stroke(row, COLORS.border, 1)
 
 			local lbl = Instance.new("TextLabel")
-			lbl.Size = UDim2.new(0.55, -14, 1, 0)
-			lbl.Position = UDim2.new(0, 14, 0, 0)
+			lbl.Size = UDim2.new(0.55, -12, 1, 0)
+			lbl.Position = UDim2.new(0, 10, 0, 0)
 			lbl.BackgroundTransparency = 1
 			lbl.Font = FONT
 			lbl.Text = labelText
 			lbl.TextColor3 = COLORS.text
-			lbl.TextSize = 13
+			lbl.TextSize = 11
 			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.TextTruncate = Enum.TextTruncate.AtEnd
 			lbl.Parent = row
 
 			local inp = Instance.new("TextBox")
-			inp.Size = UDim2.new(0.45, -24, 1, -14)
-			inp.Position = UDim2.new(0.55, 10, 0, 7)
+			inp.Size = UDim2.new(0.45, -18, 1, -10)
+			inp.Position = UDim2.new(0.55, 8, 0, 5)
 			inp.BackgroundColor3 = COLORS.panel
 			inp.BorderSizePixel = 0
 			inp.Font = FONT_BOLD
 			inp.Text = tostring(settings[key] or "")
 			inp.TextColor3 = COLORS.accentLight
-			inp.TextSize = 13
+			inp.TextSize = 11
 			inp.ClearTextOnFocus = false
 			inp.Parent = row
-			corner(inp, 6); stroke(inp, COLORS.border, 1)
+			corner(inp, 4); stroke(inp, COLORS.border, 1)
 
 			inp.FocusLost:Connect(function()
 				if isNumeric then
@@ -2283,37 +2291,38 @@ if settings["UI"] == true then
 
 		local function createToggle(parent, key, labelText, order)
 			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, 0, 0, 42)
+			row.Size = UDim2.new(1, 0, 0, H_ROW)
 			row.BackgroundColor3 = COLORS.elevated
 			row.BorderSizePixel = 0
 			row.LayoutOrder = order or 0
 			row.Parent = parent
-			corner(row, 8); stroke(row, COLORS.border, 1)
+			corner(row, 6); stroke(row, COLORS.border, 1)
 
 			local lbl = Instance.new("TextLabel")
-			lbl.Size = UDim2.new(1, -80, 1, 0)
-			lbl.Position = UDim2.new(0, 14, 0, 0)
+			lbl.Size = UDim2.new(1, -70, 1, 0)
+			lbl.Position = UDim2.new(0, 10, 0, 0)
 			lbl.BackgroundTransparency = 1
 			lbl.Font = FONT
 			lbl.Text = labelText
 			lbl.TextColor3 = COLORS.text
-			lbl.TextSize = 13
+			lbl.TextSize = 11
 			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.TextTruncate = Enum.TextTruncate.AtEnd
 			lbl.Parent = row
 
 			local state = settings[key] and true or false
 			local btn = Instance.new("TextButton")
-			btn.Size = UDim2.new(0, 46, 0, 22)
-			btn.Position = UDim2.new(1, -60, 0.5, -11)
+			btn.Size = UDim2.new(0, 40, 0, 20)
+			btn.Position = UDim2.new(1, -50, 0.5, -10)
 			btn.BackgroundColor3 = state and COLORS.green or COLORS.textDim
 			btn.BorderSizePixel = 0
 			btn.Font = FONT_BOLD
 			btn.Text = state and "ON" or "OFF"
 			btn.TextColor3 = COLORS.bg
-			btn.TextSize = 10
+			btn.TextSize = 9
 			btn.AutoButtonColor = false
 			btn.Parent = row
-			corner(btn, 11)
+			corner(btn, 10)
 
 			btn.MouseButton1Click:Connect(function()
 				state = not state
@@ -2328,47 +2337,47 @@ if settings["UI"] == true then
 
 		local function createSegment(parent, key, labelText, options, order)
 			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, 0, 0, 42)
+			row.Size = UDim2.new(1, 0, 0, H_ROW)
 			row.BackgroundColor3 = COLORS.elevated
 			row.BorderSizePixel = 0
 			row.LayoutOrder = order or 0
 			row.Parent = parent
-			corner(row, 8); stroke(row, COLORS.border, 1)
+			corner(row, 6); stroke(row, COLORS.border, 1)
 
 			local lbl = Instance.new("TextLabel")
-			lbl.Size = UDim2.new(0.4, -14, 1, 0)
-			lbl.Position = UDim2.new(0, 14, 0, 0)
+			lbl.Size = UDim2.new(0.4, -12, 1, 0)
+			lbl.Position = UDim2.new(0, 10, 0, 0)
 			lbl.BackgroundTransparency = 1
 			lbl.Font = FONT
 			lbl.Text = labelText
 			lbl.TextColor3 = COLORS.text
-			lbl.TextSize = 13
+			lbl.TextSize = 11
 			lbl.TextXAlignment = Enum.TextXAlignment.Left
 			lbl.Parent = row
 
 			local container = Instance.new("Frame")
-			container.Size = UDim2.new(0.6, -24, 1, -14)
-			container.Position = UDim2.new(0.4, 10, 0, 7)
+			container.Size = UDim2.new(0.6, -18, 1, -10)
+			container.Position = UDim2.new(0.4, 8, 0, 5)
 			container.BackgroundColor3 = COLORS.panel
 			container.BorderSizePixel = 0
 			container.Parent = row
-			corner(container, 6); stroke(container, COLORS.border, 1)
+			corner(container, 4); stroke(container, COLORS.border, 1)
 
 			local bw = 1 / #options
 			local buttons = {}
 			for i, opt in ipairs(options) do
 				local btn = Instance.new("TextButton")
-				btn.Size = UDim2.new(bw, -6, 1, -6)
-				btn.Position = UDim2.new((i-1) * bw, 3, 0, 3)
+				btn.Size = UDim2.new(bw, -4, 1, -4)
+				btn.Position = UDim2.new((i-1) * bw, 2, 0, 2)
 				btn.BackgroundColor3 = (settings[key] == opt) and COLORS.accent or COLORS.panel
 				btn.BorderSizePixel = 0
 				btn.Font = FONT_BOLD
 				btn.Text = opt
 				btn.TextColor3 = (settings[key] == opt) and COLORS.text or COLORS.textDim
-				btn.TextSize = 11
+				btn.TextSize = 10
 				btn.AutoButtonColor = false
 				btn.Parent = container
-				corner(btn, 4)
+				corner(btn, 3)
 				buttons[opt] = btn
 
 				btn.MouseButton1Click:Connect(function()
@@ -2387,17 +2396,17 @@ if settings["UI"] == true then
 
 		local function createButton(parent, labelText, color, onClick, order)
 			local btn = Instance.new("TextButton")
-			btn.Size = UDim2.new(1, 0, 0, 42)
+			btn.Size = UDim2.new(1, 0, 0, H_ROW)
 			btn.BackgroundColor3 = color or COLORS.accent
 			btn.BorderSizePixel = 0
 			btn.Font = FONT_BOLD
 			btn.Text = labelText
 			btn.TextColor3 = COLORS.text
-			btn.TextSize = 13
+			btn.TextSize = 11
 			btn.AutoButtonColor = false
 			btn.LayoutOrder = order or 0
 			btn.Parent = parent
-			corner(btn, 8)
+			corner(btn, 6)
 			btn.MouseEnter:Connect(function()
 				tweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accentLight}):Play()
 			end)
@@ -2415,13 +2424,13 @@ if settings["UI"] == true then
 		createInput(Tab01,   "SafeModeOffset",        "Safe Mode Offset",       true,  {0, 30},  5)
 		createSegment(Tab01, "Mode",                  "Mode",                   {"Safe", "Standing"}, 6)
 		createToggle(Tab01,  "KillEveryoneIfDone",    "Kill All When Done",     7)
-		createToggle(Tab01,  "ShootMurdererIfDone",   "Fling Murderer When Done", 8)
+		createToggle(Tab01,  "ShootMurdererIfDone",   "Fling Murderer",         8)
 		createToggle(Tab01,  "ResetIfDone",           "Reset When Done",        9)
 		createToggle(Tab01,  "FullyOptimizeWhileGrinding", "Fully Optimize",    10)
 
 		createToggle(Tab02, "ServerHopEnabled",       "Server Hop Enabled",     1)
 		createInput(Tab02,  "MaxHopAttempts",         "Max Hop Attempts",       true, {1, 100}, 2)
-		createInput(Tab02,  "MinPlayerCount",         "Min Player Count",       true, {1, 20},  3)
+		createInput(Tab02,  "MinPlayerCount",         "Min Player Count",       true, {1, 12},  3)
 		createInput(Tab02,  "HopCheckInterval",       "Check Interval (s)",     true, {1, 60},  4)
 		createInput(Tab02,  "HopGracePeriod",         "Grace Period (s)",       true, {1, 120}, 5)
 		createInput(Tab02,  "HopLowCountDuration",    "Low Count Duration (s)", true, {1, 120}, 6)
