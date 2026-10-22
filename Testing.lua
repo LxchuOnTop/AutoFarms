@@ -1355,7 +1355,7 @@ if settings["UI"] == true then
 		TOTALCOIN.TextStrokeTransparency = 0.900
 		TOTALCOIN.TextWrapped = true
 		player.PlayerGui:WaitForChild('UI').Enabled = true
-		elseif settings["UIMode"] == 2 then
+	elseif settings["UIMode"] == 2 then
 		local Lxchu = Instance.new("ScreenGui")
 		Lxchu.ResetOnSpawn = false
 		local UI = Instance.new("Frame")
