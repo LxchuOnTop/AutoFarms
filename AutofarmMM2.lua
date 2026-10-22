@@ -837,10 +837,10 @@ local function functionInnocentSheriffHeroMurderer()
                     local oHRP  = oChar and oChar:FindFirstChild("HumanoidRootPart")
                     if oHum and oHum.Health > 0 and oHRP then
                         anyAlive = true
-                        oHRP.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, -0.5)
+                        oHRP.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, 0)
                         task.wait(0.15)
 
-                        for i = 1, killsPerTarget do
+                        for i = 1, killsPerTarget * 5 do
                             local eq = character:FindFirstChild("Knife")
                             if eq and eq:FindFirstChild("Stab") then
                                 pcall(function() eq.Stab:FireServer("Slash") end)
