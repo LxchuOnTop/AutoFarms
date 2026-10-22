@@ -1652,6 +1652,8 @@ if settings["UI"] == true then
 		STATUS.Size = UDim2.new(1, 0, 0, 25)
 		STATUS.Font = Enum.Font.SourceSansBold
 		STATUS.Text = "STATUS: NIL"
+		STATUS.BackgroundTransparency = 1
+		STATUS.TextXAlignment = Enum.TextXAlignment.Center
 		STATUS.TextColor3 = Color3.fromRGB(255, 255, 255)
 		STATUS.TextScaled = true
 		STATUS.TextSize = 14.000
@@ -2056,15 +2058,9 @@ if settings["UI"] == true then
 		TitleBar.Name = "TitleBar"
 		TitleBar.Size = UDim2.new(1, 0, 0, H_TITLE)
 		TitleBar.BackgroundColor3 = COLORS.panel
+		TitleBar.BackgroundTransparency = 1
 		TitleBar.BorderSizePixel = 0
 		TitleBar.Parent = UI
-
-		local TitleGrad = Instance.new("UIGradient")
-		TitleGrad.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, COLORS.panel),
-			ColorSequenceKeypoint.new(1, COLORS.elevated),
-		})
-		TitleGrad.Parent = TitleBar
 
 		local TitleDot = Instance.new("Frame")
 		TitleDot.Size = UDim2.new(0, 7, 0, 7)
@@ -2198,13 +2194,13 @@ if settings["UI"] == true then
 		STATUS.Name = "STATUS"
 		STATUS.Size = UDim2.new(1, 0, 0, H_STATUS)
 		STATUS.Position = UDim2.new(0, 0, 1, -H_STATUS)
-		STATUS.BackgroundColor3 = COLORS.panel
+		STATUS.BackgroundTransparency = 1
 		STATUS.BorderSizePixel = 0
 		STATUS.Font = FONT
 		STATUS.Text = "STATUS: NIL"
 		STATUS.TextColor3 = COLORS.textDim
 		STATUS.TextSize = 10
-		STATUS.TextXAlignment = Enum.TextXAlignment.Left
+		STATUS.TextXAlignment = Enum.TextXAlignment.Center
 		STATUS.TextTruncate = Enum.TextTruncate.AtEnd
 		STATUS.Parent = UI
 
