@@ -11,7 +11,7 @@ local settings = {
 	["ShootMurdererIfDone"] = false,
 	["KillEveryoneIfDone"] = false,
 	["UI"] = true,
-	["UIMode"] = 3,
+	["UIMode"] = 2,
 	["FullyOptimizeWhileGrinding"] = false,
 	["ServerHopEnabled"] = true,
 	["MaxHopAttempts"] = 10,
@@ -2493,8 +2493,6 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService     = game:GetService("HttpService")
 
 local HOP_STATE_FILE     = settings["HopStateFile"] or "TokyoFarm_HopState.json"
-local MAX_HOP_ATTEMPTS   = tonumber(settings["MaxHopAttempts"]) or 10
-local MIN_PLAYER_COUNT   = tonumber(settings["MinPlayerCount"]) or 4
 local HOP_STATE_MAX_JOBS = 100
 
 local function loadHopState()
@@ -2592,7 +2590,7 @@ local function pickBestServer()
             and srv.id
             and srv.id ~= game.JobId
             and not table.find(hopState.visitedJobs, srv.id)
-            and (srv.playing or 0) > MIN_PLAYER_COUNT
+            and (srv.playing or 0) > (tonumber(settings["MinPlayerCount"]) or 4)
             and (srv.playing or 0) < (srv.maxPlayers or 999)
         then
             table.insert(candidates, srv)
@@ -2622,9 +2620,10 @@ end
 local function serverHop(reason)
     if not settings["ServerHopEnabled"] then return end
     if hopping then return end
-    if hopState.attempts >= MAX_HOP_ATTEMPTS then
+    local maxAttempts = tonumber(settings["MaxHopAttempts"]) or 10
+    if hopState.attempts >= maxAttempts then
         setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s")
-            :format(hopState.attempts, MAX_HOP_ATTEMPTS, tostring(reason)))
+            :format(hopState.attempts, maxAttempts, tostring(reason)))
         return
     end
 
@@ -2657,6 +2656,7 @@ local function serverHop(reason)
         if wasFarming ~= nil then farming = wasFarming end
         hopping = false
     end
+	_G._tokyoServerHop = serverHop
 end
 
 if queue_on_teleport and getgenv().TokyoFarmSourceURL then
@@ -2687,8 +2687,9 @@ task.spawn(function()
     while true do
         task.wait(settings["HopCheckInterval"] or 3)
 
-        local count     = #players:GetPlayers()
-        local threshold = MIN_PLAYER_COUNT
+        local count = #players:GetPlayers()
+
+        local threshold = tonumber(settings["MinPlayerCount"]) or 4
 
         if count <= threshold then
             local shouldSkip = (not settings["HopMidRound"]) and roundStarted and farming
