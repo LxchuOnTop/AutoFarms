@@ -2889,31 +2889,39 @@ task.spawn(function()
 		ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Extras"):WaitForChild("ChangeLastDevice"):FireServer("Phone")
 	end)
 	
-	local function swapUI()
+	local function forceMobileUI()
 		local guiFolder = ReplicatedStorage:FindFirstChild("GUI")
 		if not guiFolder or not guiFolder:FindFirstChild("MainMobile") then return end
-
-		local pcGui = playerGui:FindFirstChild("MainGUI")
 		
-		if pcGui and not pcGui:GetAttribute("IsMobileSwapped") then
+		local pcGui = playerGui:FindFirstChild("MainGUI")
+		if pcGui and not pcGui:GetAttribute("IsMobile") then
+			pcGui.Name = "MainGUI_PC"
 			pcGui.Visible = false
-			pcGui:SetAttribute("IsMobileSwapped", true)
+			pcGui:SetAttribute("IsMobile", true)
 			
-			-- Check if we already added the mobile one
-			if not playerGui:FindFirstChild("MainMobileUI") then
-				local mobileGui = guiFolder.MainMobile:Clone()
-				mobileGui.Name = "MainMobileUI"
-				mobileGui.Parent = playerGui
-			end
+			local mobileGui = guiFolder.MainMobile:Clone()
+			mobileGui.Name = "MainGUI"
+			mobileGui:SetAttribute("IsMobile", true)
+			mobileGui.Parent = playerGui
 		end
 	end
 
-	swapUI()
+	forceMobileUI()
 
 	playerGui.ChildAdded:Connect(function(child)
-		if child.Name == "MainGUI" then
+		if child.Name == "MainGUI" and not child:GetAttribute("IsMobile") then
 			task.wait(0.1)
-			swapUI()
+			forceMobileUI()
 		end
 	end)
+	
+	local deviceSelect = playerGui:FindFirstChild("DeviceSelect")
+	if deviceSelect then
+		if firesignal then
+			local btn = deviceSelect:FindFirstChild("Container") and deviceSelect.Container:FindFirstChild("Phone") and deviceSelect.Container.Phone:FindFirstChild("Button")
+			if btn then
+				firesignal(btn.MouseButton1Click)
+			end
+		end
+	end
 end)
