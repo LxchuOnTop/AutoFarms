@@ -2185,7 +2185,7 @@ if settings["UI"] == true then
 		CLOSE.BackgroundColor3 = COLORS.elevated
 		CLOSE.BorderSizePixel = 0
 		CLOSE.Font = FONT_BOLD
-		CLOSE.Text = "✕"
+		CLOSE.Text = "X"
 		CLOSE.TextColor3 = COLORS.red
 		CLOSE.TextSize = 12
 		CLOSE.AutoButtonColor = false
