@@ -1397,12 +1397,16 @@ if settings["UI"] == true then
 		UI.BorderSizePixel = 0
 		UI.Position = UDim2.new(0.5, 0, 0.5, 0)
 		if userInputService.TouchEnabled == false then
-			UI.Size = UDim2.new(0, 500, 0, 380)
+			UI.Size = UDim2.new(0, 400, 0, 320)
 		else
 			UI.Size = UDim2.new(0, 150, 0, 100)
 		end
 		UICorner.CornerRadius = UDim.new(0, 10)
 		UICorner.Parent = UI
+		
+		local uiScale = Instance.new("UIScale")
+		uiScale.Scale = 0.65
+		uiScale.Parent = UI
 		Title.Name = "Title"
 		Title.Parent = UI
 		Title.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1426,7 +1430,7 @@ if settings["UI"] == true then
 		Tab01.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Tab01.BorderSizePixel = 0
 		Tab01.Position = UDim2.new(0.5, 0, 0.54, 0)
-		Tab01.Size = UDim2.new(0, 500, 0, 340)
+		Tab01.Size = UDim2.new(0, 400, 0, 290)
 		UICorner_2.CornerRadius = UDim.new(0, 10)
 		UICorner_2.Parent = Tab01
 		SPEED.Name = "SPEED"
