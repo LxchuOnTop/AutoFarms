@@ -17,42 +17,84 @@ local settings = {
 
 local players = game:GetService("Players")
 
-local function watchPart(part)
-    part.CanCollide = false
+local tracked = {}
+
+local function enforce(part)
+    if part.CanCollide then
+        part.CanCollide = false
+    end
+end
+
+local function hookPart(char, part)
+    if not part:IsA("BasePart") then return end
+    local data = tracked[char]
+    if not data then return end
+
+    data.parts[part] = true
+    enforce(part)
+
     part:GetPropertyChangedSignal("CanCollide"):Connect(function()
-        if part.CanCollide then
+        if tracked[char] and part.CanCollide then
             part.CanCollide = false
         end
     end)
 end
 
-local function setCharacterCollision(character)
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            watchPart(part)
-        end
+local function trackCharacter(char)
+    if tracked[char] then return end
+    tracked[char] = { parts = {} }
+
+    for _, d in ipairs(char:GetDescendants()) do
+        hookPart(char, d)
     end
-    character.DescendantAdded:Connect(function(part)
-        if part:IsA("BasePart") then
-            watchPart(part)
+
+    char.DescendantAdded:Connect(function(d)
+        if tracked[char] then
+            hookPart(char, d)
         end
+    end)
+
+    char.DescendantRemoving:Connect(function(d)
+        local data = tracked[char]
+        if data then
+            data.parts[d] = nil
+        end
+    end)
+
+    char.Destroying:Connect(function()
+        tracked[char] = nil
     end)
 end
 
-local function onPlayerAdded(player)
-    if player ~= players.LocalPlayer then
-        player.CharacterAdded:Connect(setCharacterCollision)
-        if player.Character then
-            setCharacterCollision(player.Character)
+local function onPlayer(p)
+    if p == players.LocalPlayer then return end
+    if p.Character then
+        trackCharacter(p.Character)
+    end
+    p.CharacterAdded:Connect(trackCharacter)
+end
+
+for _, p in ipairs(players:GetPlayers()) do
+    onPlayer(p)
+end
+
+players.PlayerAdded:Connect(onPlayer)
+
+game:GetService('RunService').Stepped:Connect(function()
+    for char, data in pairs(tracked) do
+        if not char.Parent then
+            tracked[char] = nil
+            continue
+        end
+        for part in pairs(data.parts) do
+            if not part.Parent then
+                data.parts[part] = nil
+            elseif part.CanCollide then
+                part.CanCollide = false
+            end
         end
     end
-end
-
-for _, player in ipairs(players:GetPlayers()) do
-    onPlayerAdded(player)
-end
-
-players.PlayerAdded:Connect(onPlayerAdded)
+end)
 
 local player = players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
