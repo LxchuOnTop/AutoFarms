@@ -11,8 +11,16 @@ local settings = {
 	["ShootMurdererIfDone"] = false,
 	["KillEveryoneIfDone"] = false,
 	["UI"] = true,
-	["UIMode"] = 2,
+	["UIMode"] = 3,
 	["FullyOptimizeWhileGrinding"] = false,
+	["ServerHopEnabled"] = true,
+	["MaxHopAttempts"] = 10,
+	["MinPlayerCount"] = 4,
+	["HopCheckInterval"] = 3,
+	["HopGracePeriod"] = 12,
+	["HopLowCountDuration"] = 15,
+	["HopMidRound"] = false,
+	["HopStateFile"] = "TokyoFarm_HopState.json",
 }
 
 local players = game:GetService("Players")
@@ -173,6 +181,9 @@ local function getStatusLabel()
 	if settings["UIMode"] == 1 then
 		root = root:FindFirstChild('UI')
 		if root then root = root:FindFirstChild('Interface') end
+	elseif settings["UIMode"] == 3 then
+		root = root:FindFirstChild('TokyoUI')
+		if root then root = root:FindFirstChild('UI') end
 	else
 		root = root:FindFirstChild('Lxchu')
 		if root then root = root:FindFirstChild('UI') end
@@ -1185,7 +1196,7 @@ coinCollected.OnClientEvent:Connect(function(coinType, current, max)
 				totalLabel.Text = "TOTAL COIN COLLECTED: " .. totalCollected
 			end
 			setStatus("STATUS: Collected Coin! Current Collected: " .. roundCoins .. "/" .. max)
-		elseif settings["UIMode"] == 2 then
+		elseif settings["UIMode"] == 2 or settings["UIMode"] == 3 then
 			setStatus("STATUS: Collected Coin! Current Collected: " .. roundCoins .. "/" .. max)
 		end
 	end
@@ -1344,7 +1355,7 @@ if settings["UI"] == true then
 		TOTALCOIN.TextStrokeTransparency = 0.900
 		TOTALCOIN.TextWrapped = true
 		player.PlayerGui:WaitForChild('UI').Enabled = true
-		elseif settings["UIMode"] == 2 then
+	elseif settings["UIMode"] == 2 then
 		local Lxchu = Instance.new("ScreenGui")
 		Lxchu.ResetOnSpawn = false
 		local UI = Instance.new("Frame")
@@ -1386,12 +1397,16 @@ if settings["UI"] == true then
 		UI.BorderSizePixel = 0
 		UI.Position = UDim2.new(0.5, 0, 0.5, 0)
 		if userInputService.TouchEnabled == false then
-			UI.Size = UDim2.new(0, 500, 0, 380)
+			UI.Size = UDim2.new(0, 400, 0, 320)
 		else
 			UI.Size = UDim2.new(0, 150, 0, 100)
 		end
 		UICorner.CornerRadius = UDim.new(0, 10)
 		UICorner.Parent = UI
+		
+		local uiScale = Instance.new("UIScale")
+		uiScale.Scale = 0.65
+		uiScale.Parent = UI
 		Title.Name = "Title"
 		Title.Parent = UI
 		Title.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1415,7 +1430,7 @@ if settings["UI"] == true then
 		Tab01.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Tab01.BorderSizePixel = 0
 		Tab01.Position = UDim2.new(0.5, 0, 0.54, 0)
-		Tab01.Size = UDim2.new(0, 500, 0, 340)
+		Tab01.Size = UDim2.new(0, 400, 0, 290)
 		UICorner_2.CornerRadius = UDim.new(0, 10)
 		UICorner_2.Parent = Tab01
 		SPEED.Name = "SPEED"
@@ -1637,6 +1652,8 @@ if settings["UI"] == true then
 		STATUS.Size = UDim2.new(1, 0, 0, 25)
 		STATUS.Font = Enum.Font.SourceSansBold
 		STATUS.Text = "STATUS: NIL"
+		STATUS.BackgroundTransparency = 1
+		STATUS.TextXAlignment = Enum.TextXAlignment.Center
 		STATUS.TextColor3 = Color3.fromRGB(255, 255, 255)
 		STATUS.TextScaled = true
 		STATUS.TextSize = 14.000
@@ -1976,6 +1993,586 @@ if settings["UI"] == true then
 				odhDragging = false
 			end
 		end)
+	elseif settings["UIMode"] == 3 then
+		local COLORS = {
+			bg          = Color3.fromRGB(10, 10, 14),
+			panel       = Color3.fromRGB(18, 18, 24),
+			elevated    = Color3.fromRGB(26, 26, 34),
+			border      = Color3.fromRGB(42, 42, 53),
+			text        = Color3.fromRGB(240, 240, 245),
+			textDim     = Color3.fromRGB(138, 138, 154),
+			accent      = Color3.fromRGB(124, 92, 255),
+			accentLight = Color3.fromRGB(158, 132, 255),
+			green       = Color3.fromRGB(74, 222, 128),
+			red         = Color3.fromRGB(248, 113, 113),
+		}
+		local FONT      = Enum.Font.GothamMedium
+		local FONT_BOLD = Enum.Font.GothamBold
+
+		local H_TITLE   = 44
+		local H_TABBAR  = 34
+		local H_STATUS  = 26
+		local H_ROW     = 34
+
+		local function corner(p, r)
+			local c = Instance.new("UICorner")
+			c.CornerRadius = UDim.new(0, r or 6)
+			c.Parent = p
+			return c
+		end
+		local function stroke(p, col, th)
+			local s = Instance.new("UIStroke")
+			s.Color = col or COLORS.border
+			s.Thickness = th or 1
+			s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			s.Parent = p
+			return s
+		end
+
+		local TokyoUI = Instance.new("ScreenGui")
+		TokyoUI.Name = "TokyoUI"
+		TokyoUI.ResetOnSpawn = false
+		TokyoUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		TokyoUI.IgnoreGuiInset = true
+		TokyoUI.Parent = player:WaitForChild("PlayerGui")
+
+		local SoundService = game:GetService("SoundService")
+		
+		local notifSound = Instance.new("Sound")
+		notifSound.SoundId = "rbxassetid://4590662766"
+		notifSound.Volume = 0.15
+		notifSound.Parent = SoundService
+
+		local NotifContainer = Instance.new("Frame")
+		NotifContainer.Name = "NotifContainer"
+		NotifContainer.AnchorPoint = Vector2.new(1, 0)
+		NotifContainer.Position = UDim2.new(1, -20, 0, 20)
+		NotifContainer.Size = UDim2.new(0, 260, 1, -40)
+		NotifContainer.BackgroundTransparency = 1
+		NotifContainer.Parent = TokyoUI
+
+		local NotifLayout = Instance.new("UIListLayout")
+		NotifLayout.Padding = UDim.new(0, 8)
+		NotifLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		NotifLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+		NotifLayout.Parent = NotifContainer
+
+		_G.Notify = function(title, text)
+			if notifSound then
+				notifSound:Play()
+			end
+
+			local notif = Instance.new("Frame")
+			notif.Size = UDim2.new(1, 0, 0, 52)
+			notif.BackgroundColor3 = COLORS.elevated
+			notif.BackgroundTransparency = 1
+			notif.Position = UDim2.new(1, 280, 0, 0)
+			notif.Parent = NotifContainer
+			corner(notif, 8); stroke(notif, COLORS.border, 1)
+
+			local accent = Instance.new("Frame")
+			accent.Size = UDim2.new(0, 4, 1, -12)
+			accent.Position = UDim2.new(0, 6, 0, 6)
+			accent.BackgroundColor3 = COLORS.accent
+			accent.BorderSizePixel = 0
+			accent.Parent = notif
+			corner(accent, 4)
+
+			local titleLbl = Instance.new("TextLabel")
+			titleLbl.Size = UDim2.new(1, -24, 0, 18)
+			titleLbl.Position = UDim2.new(0, 16, 0, 8)
+			titleLbl.BackgroundTransparency = 1
+			titleLbl.Font = FONT_BOLD
+			titleLbl.Text = title
+			titleLbl.TextColor3 = COLORS.text
+			titleLbl.TextSize = 12
+			titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+			titleLbl.Parent = notif
+
+			local textLbl = Instance.new("TextLabel")
+			textLbl.Size = UDim2.new(1, -24, 0, 16)
+			textLbl.Position = UDim2.new(0, 16, 0, 26)
+			textLbl.BackgroundTransparency = 1
+			textLbl.Font = FONT
+			textLbl.Text = text
+			textLbl.TextColor3 = COLORS.textDim
+			textLbl.TextSize = 11
+			textLbl.TextXAlignment = Enum.TextXAlignment.Left
+			textLbl.TextTruncate = Enum.TextTruncate.AtEnd
+			textLbl.Parent = notif
+
+			tweenService:Create(notif, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+				Position = UDim2.new(0, 0, 0, 0),
+				BackgroundTransparency = 0
+			}):Play()
+
+			task.delay(3.5, function()
+				if notif and notif.Parent then
+					local tweenOut = tweenService:Create(notif, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+						Position = UDim2.new(1, 280, 0, 0),
+						BackgroundTransparency = 1
+					})
+					tweenOut:Play()
+					tweenOut.Completed:Connect(function()
+						notif:Destroy()
+					end)
+				end
+			end)
+		end
+
+		local UI = Instance.new("Frame")
+		UI.Name = "UI"
+		UI.AnchorPoint = Vector2.new(0.5, 0.5)
+		UI.Position = UDim2.new(0.5, 0, 0.5, 0)
+		UI.Size = UDim2.new(0.85, 0, 0.7, 0)
+		UI.BackgroundColor3 = COLORS.bg
+		UI.BorderSizePixel = 0
+		UI.ClipsDescendants = true
+		UI.Active = true
+		UI.Parent = TokyoUI
+		corner(UI, 12)
+		stroke(UI, COLORS.border, 1)
+
+		local sizeConstraint = Instance.new("UISizeConstraint")
+		sizeConstraint.MaxSize = Vector2.new(420, 380)
+		sizeConstraint.MinSize = Vector2.new(280, 300)
+		sizeConstraint.Parent = UI
+
+		local TitleBar = Instance.new("Frame")
+		TitleBar.Name = "TitleBar"
+		TitleBar.Size = UDim2.new(1, 0, 0, H_TITLE)
+		TitleBar.BackgroundColor3 = COLORS.panel
+		TitleBar.BackgroundTransparency = 1
+		TitleBar.BorderSizePixel = 0
+		TitleBar.Parent = UI
+
+		local TitleDot = Instance.new("Frame")
+		TitleDot.Size = UDim2.new(0, 7, 0, 7)
+		TitleDot.Position = UDim2.new(0, 14, 0.5, -3)
+		TitleDot.BackgroundColor3 = COLORS.accent
+		TitleDot.BorderSizePixel = 0
+		TitleDot.Parent = TitleBar
+		corner(TitleDot, 4)
+
+		local Title = Instance.new("TextLabel")
+		Title.Name = "Title"
+		Title.Size = UDim2.new(1, -100, 0, 18)
+		Title.Position = UDim2.new(0, 28, 0.5, -19)
+		Title.BackgroundTransparency = 1
+		Title.Font = FONT_BOLD
+		Title.Text = "TOKYO AUTOFARM"
+		Title.TextColor3 = COLORS.text
+		Title.TextSize = 13
+		Title.TextXAlignment = Enum.TextXAlignment.Left
+		Title.Parent = TitleBar
+
+		local Subtitle = Instance.new("TextLabel")
+		Subtitle.Size = UDim2.new(1, -100, 0, 14)
+		Subtitle.Position = UDim2.new(0, 28, 0.5, 1)
+		Subtitle.BackgroundTransparency = 1
+		Subtitle.Font = FONT
+		Subtitle.Text = "Reworked • v3"
+		Subtitle.TextColor3 = COLORS.textDim
+		Subtitle.TextSize = 9
+		Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+		Subtitle.Parent = TitleBar
+
+		local CLOSE = Instance.new("TextButton")
+		CLOSE.Name = "CLOSE"
+		CLOSE.Size = UDim2.new(0, 26, 0, 26)
+		CLOSE.Position = UDim2.new(1, -34, 0.5, -13)
+		CLOSE.BackgroundColor3 = COLORS.elevated
+		CLOSE.BorderSizePixel = 0
+		CLOSE.Font = FONT_BOLD
+		CLOSE.Text = "✕"
+		CLOSE.TextColor3 = COLORS.red
+		CLOSE.TextSize = 12
+		CLOSE.AutoButtonColor = false
+		CLOSE.Parent = TitleBar
+		corner(CLOSE, 6)
+		stroke(CLOSE, COLORS.border, 1)
+
+		local TOGGLE = Instance.new("TextButton")
+		TOGGLE.Name = "TOGGLE"
+		TOGGLE.AnchorPoint = Vector2.new(0.5, 0.5)
+		TOGGLE.Position = UDim2.new(0.9, 0, 0.88, 0)
+		TOGGLE.Size = UDim2.new(0, 44, 0, 44)
+		TOGGLE.BackgroundColor3 = COLORS.panel
+		TOGGLE.BorderSizePixel = 0
+		TOGGLE.Font = FONT_BOLD
+		TOGGLE.Text = "T"
+		TOGGLE.TextColor3 = COLORS.accent
+		TOGGLE.TextSize = 17
+		TOGGLE.AutoButtonColor = false
+		TOGGLE.Visible = false
+		TOGGLE.Parent = TokyoUI
+		corner(TOGGLE, 22)
+		stroke(TOGGLE, COLORS.accent, 2)
+
+		CLOSE.MouseEnter:Connect(function()
+			tweenService:Create(CLOSE, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.red, TextColor3 = COLORS.text}):Play()
+		end)
+		CLOSE.MouseLeave:Connect(function()
+			tweenService:Create(CLOSE, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.red}):Play()
+		end)
+		CLOSE.MouseButton1Click:Connect(function()
+			UI.Visible = false
+			TOGGLE.Visible = true
+		end)
+		TOGGLE.MouseButton1Click:Connect(function()
+			UI.Visible = true
+			TOGGLE.Visible = false
+		end)
+
+		local TabBar = Instance.new("Frame")
+		TabBar.Name = "TabBar"
+		TabBar.Size = UDim2.new(1, 0, 0, H_TABBAR)
+		TabBar.Position = UDim2.new(0, 0, 0, H_TITLE)
+		TabBar.BackgroundColor3 = COLORS.bg
+		TabBar.BorderSizePixel = 0
+		TabBar.Parent = UI
+
+		local TabDivider = Instance.new("Frame")
+		TabDivider.Size = UDim2.new(1, -20, 0, 1)
+		TabDivider.Position = UDim2.new(0, 10, 1, -1)
+		TabDivider.BackgroundColor3 = COLORS.border
+		TabDivider.BorderSizePixel = 0
+		TabDivider.Parent = TabBar
+
+		local Tab1Btn = Instance.new("TextButton")
+		Tab1Btn.Name = "Tab1Btn"
+		Tab1Btn.Size = UDim2.new(0, 96, 0, 26)
+		Tab1Btn.Position = UDim2.new(0, 10, 0, 4)
+		Tab1Btn.BackgroundColor3 = COLORS.accent
+		Tab1Btn.BorderSizePixel = 0
+		Tab1Btn.Font = FONT_BOLD
+		Tab1Btn.Text = "FARM"
+		Tab1Btn.TextColor3 = COLORS.text
+		Tab1Btn.TextSize = 11
+		Tab1Btn.AutoButtonColor = false
+		Tab1Btn.Parent = TabBar
+		corner(Tab1Btn, 6)
+
+		local Tab2Btn = Instance.new("TextButton")
+		Tab2Btn.Name = "Tab2Btn"
+		Tab2Btn.Size = UDim2.new(0, 116, 0, 26)
+		Tab2Btn.Position = UDim2.new(0, 112, 0, 4)
+		Tab2Btn.BackgroundColor3 = COLORS.elevated
+		Tab2Btn.BorderSizePixel = 0
+		Tab2Btn.Font = FONT_BOLD
+		Tab2Btn.Text = "SERVER HOP"
+		Tab2Btn.TextColor3 = COLORS.textDim
+		Tab2Btn.TextSize = 11
+		Tab2Btn.AutoButtonColor = false
+		Tab2Btn.Parent = TabBar
+		corner(Tab2Btn, 6)
+
+		local Content = Instance.new("Frame")
+		Content.Name = "Content"
+		Content.Size = UDim2.new(1, 0, 1, -(H_TITLE + H_TABBAR + H_STATUS))
+		Content.Position = UDim2.new(0, 0, 0, H_TITLE + H_TABBAR)
+		Content.BackgroundTransparency = 1
+		Content.Parent = UI
+
+		local STATUS = Instance.new("TextLabel")
+		STATUS.Name = "STATUS"
+		STATUS.Size = UDim2.new(1, 0, 0, H_STATUS)
+		STATUS.Position = UDim2.new(0, 0, 1, -H_STATUS)
+		STATUS.BackgroundTransparency = 1
+		STATUS.BorderSizePixel = 0
+		STATUS.Font = FONT
+		STATUS.Text = "STATUS: NIL"
+		STATUS.TextColor3 = COLORS.textDim
+		STATUS.TextSize = 10
+		STATUS.TextXAlignment = Enum.TextXAlignment.Center
+		STATUS.TextTruncate = Enum.TextTruncate.AtEnd
+		STATUS.Parent = UI
+
+		local function makeTab(name)
+			local tab = Instance.new("ScrollingFrame")
+			tab.Name = name
+			tab.Size = UDim2.new(1, -14, 1, -10)
+			tab.Position = UDim2.new(0, 7, 0, 5)
+			tab.BackgroundTransparency = 1
+			tab.BorderSizePixel = 0
+			tab.ScrollBarThickness = 3
+			tab.ScrollBarImageColor3 = COLORS.border
+			tab.CanvasSize = UDim2.new(0, 0, 0, 0)
+			tab.AutomaticCanvasSize = Enum.AutomaticSize.Y
+			tab.Parent = Content
+			local layout = Instance.new("UIListLayout")
+			layout.Padding = UDim.new(0, 4)
+			layout.SortOrder = Enum.SortOrder.LayoutOrder
+			layout.Parent = tab
+			return tab
+		end
+
+		local Tab01 = makeTab("Tab01")
+		local Tab02 = makeTab("Tab02")
+		Tab02.Visible = false
+
+		Tab1Btn.MouseButton1Click:Connect(function()
+			Tab01.Visible = true; Tab02.Visible = false
+			tweenService:Create(Tab1Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accent,  TextColor3 = COLORS.text}):Play()
+			tweenService:Create(Tab2Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
+		end)
+		Tab2Btn.MouseButton1Click:Connect(function()
+			Tab01.Visible = false; Tab02.Visible = true
+			tweenService:Create(Tab2Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accent,  TextColor3 = COLORS.text}):Play()
+			tweenService:Create(Tab1Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
+		end)
+
+				local function createInput(parent, key, labelText, isNumeric, clampRange, order)
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, 0, 0, H_ROW)
+			row.BackgroundColor3 = COLORS.elevated
+			row.BorderSizePixel = 0
+			row.LayoutOrder = order or 0
+			row.Parent = parent
+			corner(row, 6); stroke(row, COLORS.border, 1)
+
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.new(0.55, -12, 1, 0)
+			lbl.Position = UDim2.new(0, 10, 0, 0)
+			lbl.BackgroundTransparency = 1
+			lbl.Font = FONT
+			lbl.Text = labelText
+			lbl.TextColor3 = COLORS.text
+			lbl.TextSize = 11
+			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.TextTruncate = Enum.TextTruncate.AtEnd
+			lbl.Parent = row
+
+			local inp = Instance.new("TextBox")
+			inp.Size = UDim2.new(0.45, -18, 1, -10)
+			inp.Position = UDim2.new(0.55, 8, 0, 5)
+			inp.BackgroundColor3 = COLORS.panel
+			inp.BorderSizePixel = 0
+			inp.Font = FONT_BOLD
+			inp.Text = tostring(settings[key] or "")
+			inp.TextColor3 = COLORS.accentLight
+			inp.TextSize = 11
+			inp.ClearTextOnFocus = false
+			inp.Parent = row
+			corner(inp, 4); stroke(inp, COLORS.border, 1)
+
+			inp.FocusLost:Connect(function()
+				local oldVal = tostring(settings[key])
+				if isNumeric then
+					local n = tonumber(inp.Text)
+					if n then
+						if clampRange then n = math.clamp(n, clampRange[1], clampRange[2]) end
+						settings[key] = n
+						inp.Text = tostring(n)
+						if tostring(n) ~= oldVal then _G.Notify("Setting Updated", labelText .. " set to " .. tostring(n)) end
+					else
+						inp.Text = tostring(settings[key])
+					end
+				else
+					settings[key] = inp.Text
+					if inp.Text ~= oldVal then _G.Notify("Setting Updated", labelText .. " set to " .. inp.Text) end
+				end
+			end)
+			return row
+		end
+
+		local function createToggle(parent, key, labelText, order)
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, 0, 0, H_ROW)
+			row.BackgroundColor3 = COLORS.elevated
+			row.BorderSizePixel = 0
+			row.LayoutOrder = order or 0
+			row.Parent = parent
+			corner(row, 6); stroke(row, COLORS.border, 1)
+
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.new(1, -70, 1, 0)
+			lbl.Position = UDim2.new(0, 10, 0, 0)
+			lbl.BackgroundTransparency = 1
+			lbl.Font = FONT
+			lbl.Text = labelText
+			lbl.TextColor3 = COLORS.text
+			lbl.TextSize = 11
+			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.TextTruncate = Enum.TextTruncate.AtEnd
+			lbl.Parent = row
+
+			local state = settings[key] and true or false
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(0, 40, 0, 20)
+			btn.Position = UDim2.new(1, -50, 0.5, -10)
+			btn.BackgroundColor3 = state and COLORS.green or COLORS.textDim
+			btn.BorderSizePixel = 0
+			btn.Font = FONT_BOLD
+			btn.Text = state and "ON" or "OFF"
+			btn.TextColor3 = COLORS.bg
+			btn.TextSize = 9
+			btn.AutoButtonColor = false
+			btn.Parent = row
+			corner(btn, 10)
+
+			btn.MouseButton1Click:Connect(function()
+				state = not state
+				settings[key] = state
+				btn.Text = state and "ON" or "OFF"
+				tweenService:Create(btn, TweenInfo.new(0.15), {
+					BackgroundColor3 = state and COLORS.green or COLORS.textDim
+				}):Play()
+				_G.Notify("Toggled", labelText .. ": " .. (state and "ON" or "OFF"))
+			end)
+			return row
+		end
+
+		local function createSegment(parent, key, labelText, options, order)
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, 0, 0, H_ROW)
+			row.BackgroundColor3 = COLORS.elevated
+			row.BorderSizePixel = 0
+			row.LayoutOrder = order or 0
+			row.Parent = parent
+			corner(row, 6); stroke(row, COLORS.border, 1)
+
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.new(0.4, -12, 1, 0)
+			lbl.Position = UDim2.new(0, 10, 0, 0)
+			lbl.BackgroundTransparency = 1
+			lbl.Font = FONT
+			lbl.Text = labelText
+			lbl.TextColor3 = COLORS.text
+			lbl.TextSize = 11
+			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.Parent = row
+
+			local container = Instance.new("Frame")
+			container.Size = UDim2.new(0.6, -18, 1, -10)
+			container.Position = UDim2.new(0.4, 8, 0, 5)
+			container.BackgroundColor3 = COLORS.panel
+			container.BorderSizePixel = 0
+			container.Parent = row
+			corner(container, 4); stroke(container, COLORS.border, 1)
+
+			local bw = 1 / #options
+			local buttons = {}
+			for i, opt in ipairs(options) do
+				local btn = Instance.new("TextButton")
+				btn.Size = UDim2.new(bw, -4, 1, -4)
+				btn.Position = UDim2.new((i-1) * bw, 2, 0, 2)
+				btn.BackgroundColor3 = (settings[key] == opt) and COLORS.accent or COLORS.panel
+				btn.BorderSizePixel = 0
+				btn.Font = FONT_BOLD
+				btn.Text = opt
+				btn.TextColor3 = (settings[key] == opt) and COLORS.text or COLORS.textDim
+				btn.TextSize = 10
+				btn.AutoButtonColor = false
+				btn.Parent = container
+				corner(btn, 3)
+				buttons[opt] = btn
+
+				btn.MouseButton1Click:Connect(function()
+					if settings[key] ~= opt then
+						settings[key] = opt
+						for o, b in pairs(buttons) do
+							local active = (o == opt)
+							tweenService:Create(b, TweenInfo.new(0.15), {
+								BackgroundColor3 = active and COLORS.accent or COLORS.panel,
+								TextColor3 = active and COLORS.text or COLORS.textDim,
+							}):Play()
+						end
+						_G.Notify("Mode Changed", labelText .. " set to " .. opt)
+					end
+				end)
+			end
+			return row
+		end
+
+		local function createButton(parent, labelText, color, onClick, order)
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(1, 0, 0, H_ROW)
+			btn.BackgroundColor3 = color or COLORS.accent
+			btn.BorderSizePixel = 0
+			btn.Font = FONT_BOLD
+			btn.Text = labelText
+			btn.TextColor3 = COLORS.text
+			btn.TextSize = 11
+			btn.AutoButtonColor = false
+			btn.LayoutOrder = order or 0
+			btn.Parent = parent
+			corner(btn, 6)
+			btn.MouseEnter:Connect(function()
+				tweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accentLight}):Play()
+			end)
+			btn.MouseLeave:Connect(function()
+				tweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = color or COLORS.accent}):Play()
+			end)
+			btn.MouseButton1Click:Connect(function()
+				_G.Notify("Action", "Executing " .. labelText)
+				onClick()
+			end)
+			return btn
+		end
+
+		createInput(Tab01,   "AutofarmSpeed",         "Autofarm Speed",         true,  {1, 500}, 1)
+		createInput(Tab01,   "TweenDelay",            "Tween Delay",            true,  {0.01, 5}, 2)
+		createInput(Tab01,   "CoinAuraDistance",      "Coin Aura Distance",     true,  {0, 50},  3)
+		createInput(Tab01,   "CoinType",              "Coin Type",              false, nil,      4)
+		createInput(Tab01,   "SafeModeOffset",        "Safe Mode Offset",       true,  {0, 30},  5)
+		createSegment(Tab01, "Mode",                  "Mode",                   {"Safe", "Standing"}, 6)
+		createToggle(Tab01,  "KillEveryoneIfDone",    "Kill All When Done",     7)
+		createToggle(Tab01,  "ShootMurdererIfDone",   "Fling Murderer",         8)
+		createToggle(Tab01,  "ResetIfDone",           "Reset When Done",        9)
+		createToggle(Tab01,  "FullyOptimizeWhileGrinding", "Fully Optimize",    10)
+
+		createToggle(Tab02, "ServerHopEnabled",       "Server Hop Enabled",     1)
+		createInput(Tab02,  "MaxHopAttempts",         "Max Hop Attempts",       true, {1, 100}, 2)
+		createInput(Tab02,  "MinPlayerCount",         "Min Player Count",       true, {1, 12},  3)
+		createInput(Tab02,  "HopCheckInterval",       "Check Interval (s)",     true, {1, 60},  4)
+		createInput(Tab02,  "HopGracePeriod",         "Grace Period (s)",       true, {1, 120}, 5)
+		createInput(Tab02,  "HopLowCountDuration",    "Low Count Duration (s)", true, {1, 120}, 6)
+		createToggle(Tab02, "HopMidRound",            "Allow Hop Mid-Round",    7)
+		createButton(Tab02, "⚡ HOP NOW", COLORS.accent, function()
+			if not _G._tokyoServerHop then
+				setStatus("[AutoHop] Server-hop module not loaded yet")
+				return
+			end
+			local saved = settings["ServerHopEnabled"]
+			settings["ServerHopEnabled"] = true
+			_G._tokyoServerHop("Manual user request")
+			settings["ServerHopEnabled"] = saved
+		end, 8)
+		createButton(Tab02, "♻ Reset Hop Counter", COLORS.elevated, function()
+			hopState.attempts = 0
+			saveHopState(hopState)
+			setStatus("[AutoHop] Attempt counter reset")
+		end, 9)
+
+		local dragging, dragStart, startPos = false, nil, nil
+		local function beginDrag(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				dragStart = input.Position
+				startPos = UI.Position
+			end
+		end
+		TitleBar.InputBegan:Connect(beginDrag)
+		Title.InputBegan:Connect(beginDrag)
+		Subtitle.InputBegan:Connect(beginDrag)
+
+		userInputService.InputChanged:Connect(function(input)
+			if not dragging then return end
+			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+				local delta = input.Position - dragStart
+				UI.Position = UDim2.new(
+					startPos.X.Scale, startPos.X.Offset + delta.X,
+					startPos.Y.Scale, startPos.Y.Offset + delta.Y
+				)
+			end
+		end)
+		userInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
+			end
+		end)
 	end
 end
 
@@ -1998,8 +2595,233 @@ task.spawn(function()
     end
 end)
 
-game:GetService('StarterGui'):SetCore('SendNotification',{
-	Title = "Script Loaded!",
-	Text = "Script was made by tokyomemoriess on Discord.",
-	Duration = 2,
-})
+local TeleportService = game:GetService("TeleportService")
+local HttpService     = game:GetService("HttpService")
+
+local HOP_STATE_FILE     = settings["HopStateFile"] or "TokyoFarm_HopState.json"
+local HOP_STATE_MAX_JOBS = 100
+
+local function loadHopState()
+    local state = { attempts = 0, visitedJobs = {} }
+
+    if isfile and isfile(HOP_STATE_FILE) then
+        pcall(function()
+            local data = HttpService:JSONDecode(readfile(HOP_STATE_FILE))
+            if type(data) ~= "table" then return end
+            state.attempts = tonumber(data.attempts) or 0
+
+            local vj = data.visitedJobs
+            if type(vj) == "table" then
+                for k, v in pairs(vj) do
+                    if type(k) == "number" then
+                        table.insert(state.visitedJobs, v)
+                    elseif type(k) == "string" and v == true then
+                        table.insert(state.visitedJobs, k)
+                    end
+                end
+            end
+        end)
+    end
+
+    if game.JobId and game.JobId ~= "" and not table.find(state.visitedJobs, game.JobId) then
+        table.insert(state.visitedJobs, game.JobId)
+    end
+
+    while #state.visitedJobs > HOP_STATE_MAX_JOBS do
+        table.remove(state.visitedJobs, 1)
+    end
+
+    return state
+end
+
+local function saveHopState(state)
+    if not writefile then return end
+    pcall(function()
+        writefile(HOP_STATE_FILE, HttpService:JSONEncode(state))
+    end)
+end
+
+local hopState = loadHopState()
+
+task.spawn(function()
+    task.wait(300)
+    if hopState.attempts > 0 then
+        hopState.attempts = 0
+        saveHopState(hopState)
+        setStatus("[AutoHop] Session healthy, attempt counter reset")
+    end
+end)
+
+local function httpGetJson(url)
+    local body
+
+    local providers = {
+        function() return syn and syn.request and syn.request({ Url = url, Method = "GET" }) end,
+        function() return http and http.request and http.request({ Url = url, Method = "GET" }) end,
+        function() return request and request({ Url = url, Method = "GET" }) end,
+    }
+    for _, fn in ipairs(providers) do
+        local ok, res = pcall(fn)
+        if ok and type(res) == "table" and res.Body then
+            body = res.Body
+            break
+        end
+    end
+
+    if not body then
+        local ok, raw = pcall(function() return game:HttpGet(url) end)
+        if ok and type(raw) == "string" then body = raw end
+    end
+
+    if not body then return nil end
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+    if not ok or type(data) ~= "table" then return nil end
+    return data
+end
+
+local function fetchServers()
+    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100")
+        :format(game.PlaceId)
+    local data = httpGetJson(url)
+    if not data or type(data.data) ~= "table" then return {} end
+    return data.data
+end
+
+local function pickBestServer()
+    local servers = fetchServers()
+    local candidates = {}
+
+    for _, srv in ipairs(servers) do
+        if type(srv) == "table"
+            and srv.id
+            and srv.id ~= game.JobId
+            and not table.find(hopState.visitedJobs, srv.id)
+            and (srv.playing or 0) > (tonumber(settings["MinPlayerCount"]) or 4)
+            and (srv.playing or 0) < (srv.maxPlayers or 999)
+        then
+            table.insert(candidates, srv)
+        end
+    end
+
+    table.sort(candidates, function(a, b)
+        local pa, pb = a.playing or 0, b.playing or 0
+        if pa ~= pb then return pa > pb end
+        return (a.id or "") > (b.id or "")
+    end)
+
+    return candidates[1]
+end
+
+local hopping = false
+
+local function rememberJob(id)
+    if not id or id == "" then return end
+    if table.find(hopState.visitedJobs, id) then return end
+    table.insert(hopState.visitedJobs, id)
+    while #hopState.visitedJobs > HOP_STATE_MAX_JOBS do
+        table.remove(hopState.visitedJobs, 1)
+    end
+end
+
+local function serverHop(reason)
+    if not settings["ServerHopEnabled"] then return end
+    if hopping then return end
+    local maxAttempts = tonumber(settings["MaxHopAttempts"]) or 10
+    if hopState.attempts >= maxAttempts then
+        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s")
+            :format(hopState.attempts, maxAttempts, tostring(reason)))
+        return
+    end
+
+    hopping = true
+    hopState.attempts = hopState.attempts + 1
+    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s"):format(hopState.attempts, maxAttempts, tostring(reason)))
+
+    local wasFarming = farming
+    if wasFarming ~= nil then farming = false end
+
+    local target = pickBestServer()
+    if target then rememberJob(target.id) end
+    saveHopState(hopState)
+
+    local ok, err
+    if target then
+        ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, players.LocalPlayer)
+        end)
+    else
+        setStatus("[AutoHop] No suitable server found, falling back to random teleport")
+        ok, err = pcall(function()
+            TeleportService:Teleport(game.PlaceId, players.LocalPlayer)
+        end)
+    end
+
+    if not ok then
+        setStatus("[AutoHop] Teleport failed: " .. tostring(err))
+        if wasFarming ~= nil then farming = wasFarming end
+        hopping = false
+    end
+end
+
+_G._tokyoServerHop = serverHop
+
+if queue_on_teleport and getgenv().TokyoFarmSourceURL then
+    pcall(function()
+        queue_on_teleport("loadstring(game:HttpGet('" .. getgenv().TokyoFarmSourceURL .. "'))()")
+    end)
+end
+
+game.OnClose = function()
+    serverHop("OnClose (kick / shutdown / disconnect)")
+end
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        local lp = players.LocalPlayer
+        if lp and not lp.Parent then
+            serverHop("LocalPlayer removed from Players (kick)")
+            break
+        end
+    end
+end)
+
+task.spawn(function()
+    task.wait(settings["HopGracePeriod"] or 12)
+    local lowSince = nil
+
+    while true do
+        task.wait(settings["HopCheckInterval"] or 3)
+
+        local count = #players:GetPlayers()
+
+        local threshold = tonumber(settings["MinPlayerCount"]) or 4
+
+        if count <= threshold then
+            local shouldSkip = (not settings["HopMidRound"]) and roundStarted and farming
+            if not shouldSkip then
+                if not lowSince then
+                    lowSince = os.time()
+                elseif os.time() - lowSince >= (settings["HopLowCountDuration"] or 15) then
+                    lowSince = nil
+                    serverHop(("Low player count: %d <= %d"):format(count, threshold))
+                end
+            end
+        else
+            lowSince = nil
+        end
+    end
+end)
+
+task.spawn(function()
+    task.wait(1.5)
+    if _G.Notify then
+        _G.Notify("Script Loaded!", "Made by tokyomemoriess on Discord.")
+    else
+        game:GetService('StarterGui'):SetCore('SendNotification',{
+            Title = "Script Loaded!",
+            Text = "Script was made by tokyomemoriess on Discord.",
+            Duration = 2,
+        })
+    end
+end)
