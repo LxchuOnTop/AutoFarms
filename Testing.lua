@@ -13,39 +13,96 @@ local settings = {
 	["UI"] = true,
 	["UIMode"] = 2,
 	["FullyOptimizeWhileGrinding"] = false,
+	["ServerHopEnabled"] = true,
+	["MaxHopAttempts"] = 10,
+	["MinPlayerCount"] = 4,
+	["HopCheckInterval"] = 3,
+	["HopGracePeriod"] = 12,
+	["HopLowCountDuration"] = 15,
+	["HopMidRound"] = false,
+	["HopStateFile"] = "TokyoFarm_HopState.json",
 }
 
 local players = game:GetService("Players")
 
-local function setCharacterCollision(character)
-	for _, part in ipairs(character:GetDescendants()) do
-		if part:IsA("BasePart") then
-			part.CanCollide = false
-		end
-	end
-	character.DescendantAdded:Connect(function(part)
-		if part:IsA("BasePart") then
-			part.CanCollide = false
-		end
-	end)
+local tracked = {}
+
+local function enforce(part)
+    if part.CanCollide then
+        part.CanCollide = false
+    end
 end
 
-local function onPlayerAdded(player)
-	if player ~= players.LocalPlayer then
-		player.CharacterAdded:Connect(function(character)
-			setCharacterCollision(character)
-		end)
-		if player.Character then
-			setCharacterCollision(player.Character)
-		end
-	end
+local function hookPart(char, part)
+    if not part:IsA("BasePart") then return end
+    local data = tracked[char]
+    if not data then return end
+
+    data.parts[part] = true
+    enforce(part)
+
+    part:GetPropertyChangedSignal("CanCollide"):Connect(function()
+        if tracked[char] and part.CanCollide then
+            part.CanCollide = false
+        end
+    end)
 end
 
-for _, player in ipairs(players:GetPlayers()) do
-	onPlayerAdded(player)
+local function trackCharacter(char)
+    if tracked[char] then return end
+    tracked[char] = { parts = {} }
+
+    for _, d in ipairs(char:GetDescendants()) do
+        hookPart(char, d)
+    end
+
+    char.DescendantAdded:Connect(function(d)
+        if tracked[char] then
+            hookPart(char, d)
+        end
+    end)
+
+    char.DescendantRemoving:Connect(function(d)
+        local data = tracked[char]
+        if data then
+            data.parts[d] = nil
+        end
+    end)
+
+    char.Destroying:Connect(function()
+        tracked[char] = nil
+    end)
 end
 
-players.PlayerAdded:Connect(onPlayerAdded)
+local function onPlayer(p)
+    if p == players.LocalPlayer then return end
+    if p.Character then
+        trackCharacter(p.Character)
+    end
+    p.CharacterAdded:Connect(trackCharacter)
+end
+
+for _, p in ipairs(players:GetPlayers()) do
+    onPlayer(p)
+end
+
+players.PlayerAdded:Connect(onPlayer)
+
+game:GetService('RunService').Stepped:Connect(function()
+    for char, data in pairs(tracked) do
+        if not char.Parent then
+            tracked[char] = nil
+            continue
+        end
+        for part in pairs(data.parts) do
+            if not part.Parent then
+                data.parts[part] = nil
+            elseif part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
 
 local player = players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -664,7 +721,6 @@ local function teleportFunction(cframe, duration, ifCoin)
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
-			task.wait(settings["TweenDelay"])
 		end)
 
 		function handle:Cancel()
@@ -686,114 +742,173 @@ local function hasKnife()
 	return character:FindFirstChild("Knife") ~= nil or (player.Backpack and player.Backpack:FindFirstChild("Knife") ~= nil)
 end
 
+local function resetForAction()
+    if currentFarmHandle and currentFarmHandle.Cancel then
+        pcall(function() currentFarmHandle:Cancel() end)
+        currentFarmHandle = nil
+    end
+
+    safeHold.active = false
+    safeHold.tweening = false
+    safeHold.targetCFrame = nil
+    physicsSettled = false
+
+    if floatForce then
+        pcall(function() floatForce:Destroy() end)
+        floatForce = nil
+    end
+
+    if humanoid and humanoid.Parent then
+        humanoid.EvaluateStateMachine = true
+        humanoid.PlatformStand = false
+        humanoid.AutoRotate = true
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+        end)
+    end
+
+    if character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local n = part.Name
+                if n == "Head" or n == "UpperTorso" or n == "LowerTorso" or n == "Torso" then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+    if humanoidRootPart and humanoidRootPart.Parent then
+        humanoidRootPart.CanCollide = true
+        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    if character then
+        local animateScript = character:FindFirstChild("Animate")
+        if animateScript then animateScript.Enabled = true end
+    end
+    if humanoid and humanoid.Parent and not humanoid:FindFirstChildOfClass("Animator") then
+        local animator = Instance.new("Animator")
+        animator.Parent = humanoid
+    end
+
+    physicsDisabled = false
+
+    if humanoidRootPart and humanoidRootPart.Parent then
+        humanoidRootPart.CFrame = startPosition
+        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+    end
+    if humanoid and humanoid.Parent then
+        pcall(function()
+            humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+        end)
+    end
+end
+
 local function functionInnocentSheriffHeroMurderer()
-	if not (player and player.Character and humanoid and humanoidRootPart) then return end
-	if not (roundStarted and fullBag and alive) then return end
+    if not (player and player.Character and humanoid and humanoidRootPart) then return end
+    if not (roundStarted and fullBag and alive) then return end
 
-	local iAmMurderer = hasKnife()
+    resetForAction()
+    task.wait(0.2)
 
-	if settings["KillEveryoneIfDone"] and iAmMurderer then
-		local knife = character:FindFirstChild("Knife")
-			or (player.Backpack and player.Backpack:FindFirstChild("Knife"))
+    local iAmMurderer = hasKnife()
 
-		if not knife then
-			setStatus("STATUS: No Knife — can't kill everyone")
-			return
-		end
+    if settings["KillEveryoneIfDone"] and iAmMurderer then
+        local knife = character:FindFirstChild("Knife")
+            or (player.Backpack and player.Backpack:FindFirstChild("Knife"))
 
-		if knife.Parent == player.Backpack then
-			humanoid:EquipTool(knife)
-			task.wait(0.2)
-		end
+        if not knife then
+            setStatus("STATUS: No Knife — can't kill everyone")
+            return
+        end
 
-		setStatus("STATUS: Filled Bag! Killing Everyone...")
+        if knife.Parent == player.Backpack then
+            humanoid:EquipTool(knife)
+            task.wait(0.3)
+        end
 
-		local killed = {}
-		local maxPasses = 3
-		local killsPerTarget = 8
+        setStatus("STATUS: Filled Bag! Killing Everyone...")
 
-		for pass = 1, maxPasses do
-			local anyAlive = false
-			for _, other in ipairs(players:GetPlayers()) do
-				if other ~= player and not killed[other] then
-					local oChar = other.Character
-					local oHum  = oChar and oChar:FindFirstChildOfClass("Humanoid")
-					local oHRP  = oChar and oChar:FindFirstChild("HumanoidRootPart")
-					if oHum and oHum.Health > 0 and oHRP then
-						anyAlive = true
-						local origin = humanoidRootPart.CFrame
+        local killed = {}
+        local maxPasses = 3
+        local killsPerTarget = 8
 
-						oHRP.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, -0.5)
-						task.wait(0.15)
+        for pass = 1, maxPasses do
+            local anyAlive = false
+            for _, other in ipairs(players:GetPlayers()) do
+                if other ~= player and not killed[other] then
+                    local oChar = other.Character
+                    local oHum  = oChar and oChar:FindFirstChildOfClass("Humanoid")
+                    local oHRP  = oChar and oChar:FindFirstChild("HumanoidRootPart")
+                    if oHum and oHum.Health > 0 and oHRP then
+                        anyAlive = true
+                        oHRP.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, 0)
+                        task.wait(0.15)
 
-						for i = 1, killsPerTarget do
-							local eq = character:FindFirstChild("Knife")
-							if eq and eq:FindFirstChild("Stab") then
-								pcall(function()
-									eq.Stab:FireServer("Slash")
-								end)
-							end
-							task.wait(0.04)
-						end
+                        for i = 1, killsPerTarget * 5 do
+                            local eq = character:FindFirstChild("Knife")
+                            if eq and eq:FindFirstChild("Stab") then
+                                pcall(function() eq.Stab:FireServer("Slash") end)
+                            end
+                            task.wait(0.04)
+                        end
 
-						if oHum.Health <= 0 then
-							killed[other] = true
-							other:SetAttribute('AmIAlive', nil)
-						end
+                        if oHum.Health <= 0 then
+                            killed[other] = true
+                            other:SetAttribute('AmIAlive', nil)
+                        end
+                    else
+                        killed[other] = true
+                    end
+                end
+            end
+            if not anyAlive then break end
+            task.wait(0.1)
+        end
 
-						humanoidRootPart.CFrame = origin
-					else
-						killed[other] = true
-					end
-				end
-			end
-			if not anyAlive then break end
-			task.wait(0.1)
-		end
+        humanoidRootPart.CFrame = startPosition
+        return
+    end
 
-		humanoidRootPart.CFrame = startPosition
-		return
-	end
+    if settings["ShootMurdererIfDone"] and not iAmMurderer then
+        local murderer = nil
+        for _, other in ipairs(players:GetPlayers()) do
+            if other ~= player and other.Character then
+                local oChar = other.Character
+                local oHasKnife = oChar:FindFirstChild("Knife")
+                    or (other.Backpack and other.Backpack:FindFirstChild("Knife"))
+                if oHasKnife then
+                    murderer = other
+                    break
+                end
+            end
+        end
 
-	if settings["ShootMurdererIfDone"] and not iAmMurderer then
-		local murderer = nil
-		for _, other in ipairs(players:GetPlayers()) do
-			if other ~= player and other.Character then
-				local oChar = other.Character
-				local oHasKnife = oChar:FindFirstChild("Knife")
-					or (other.Backpack and other.Backpack:FindFirstChild("Knife"))
-				if oHasKnife then
-					murderer = other
-					break
-				end
-			end
-		end
+        if murderer then
+            setStatus("STATUS: Filled Bag! Flinging Murderer...")
+            flingActive = true
+            pcall(OdhSkid, murderer, 3)
+            flingActive = false
+            humanoidRootPart.CFrame = startPosition
+            resetForAction()
+            setStatus("STATUS: Murderer flung!")
+        else
+            setStatus("STATUS: Filled Bag! Murderer not found.")
+        end
+        return
+    end
 
-		if murderer then
-			setStatus("STATUS: Filled Bag! Flinging Murderer...")
-			restorePhysics()
-			task.wait(0.1)
-			flingActive = true
-			pcall(OdhSkid, murderer, 3)
-			flingActive = false
-			humanoidRootPart.CFrame = startPosition
-			restorePhysics()
-			setStatus("STATUS: Murderer flung!")
-		else
-			setStatus("STATUS: Filled Bag! Murderer not found.")
-		end
-		return
-	end
-
-	if settings["ResetIfDone"] then
-		if character:FindFirstChild("Humanoid") then
-			setStatus("STATUS: Filled Bag! Resetting...")
-			humanoidRootPart.CFrame = startPosition
-			task.wait(settings["TweenDelay"])
-			character.Humanoid.Health = 0
-		end
-		return
-	end
+    if settings["ResetIfDone"] then
+        if character:FindFirstChild("Humanoid") then
+            setStatus("STATUS: Filled Bag! Resetting...")
+            task.wait(0.1)
+            character.Humanoid.Health = 0
+        end
+        return
+    end
 end
 
 local function returnToStartPosition()
@@ -956,7 +1071,7 @@ local function startFarmingLoop()
 				if not processed then
 					task.wait(settings["TweenDelay"])
 				else
-					task.wait()
+					task.wait(settings["TweenDelay"])
 				end
 			end)
 			if not ok then
@@ -1540,10 +1655,10 @@ if settings["UI"] == true then
 			SPEED.Text = tostring(settings["AutofarmSpeed"])
 		end
 		SPEED.MouseEnter:Connect(function()
-			tweenService:Create(SPEED, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+			tweenService:Create(SPEED, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0), PlaceholderColor3 = Color3.fromRGB(0,0,0)}):Play()
 		end)
 		SPEED.MouseLeave:Connect(function()
-			tweenService:Create(SPEED, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+			tweenService:Create(SPEED, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255), PlaceholderColor3 = Color3.fromRGB(255,255,255)}):Play()
 		end)
 		SPEED.FocusLost:Connect(function()
 			local value = tonumber(SPEED.Text)
@@ -1593,25 +1708,25 @@ if settings["UI"] == true then
 			DELAY.Text = tostring(settings["TweenDelay"])
 		end
 		DELAY.MouseEnter:Connect(function()
-			tweenService:Create(DELAY, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+			tweenService:Create(DELAY, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0,0,0), PlaceholderColor3 = Color3.fromRGB(0,0,0)}):Play()
 		end)
 		DELAY.MouseLeave:Connect(function()
-			tweenService:Create(DELAY, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+			tweenService:Create(DELAY, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255), PlaceholderColor3 = Color3.fromRGB(255,255,255)}):Play()
 		end)
 		DELAY.FocusLost:Connect(function()
 			local value = tonumber(DELAY.Text)
 			if value then
-				settings["TweenDelay"] = value
+				settings["TweenDelay"] = math.clamp(value, 0.01, 5)
 			end
 		end)
 		if settings["CoinAuraDistance"] then
 			CAURADISTANCE.Text = tostring(settings["CoinAuraDistance"])
 		end
 		CAURADISTANCE.MouseEnter:Connect(function()
-			tweenService:Create(CAURADISTANCE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+			tweenService:Create(CAURADISTANCE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0,0,0), PlaceholderColor3 = Color3.fromRGB(0,0,0)}):Play()
 		end)
 		CAURADISTANCE.MouseLeave:Connect(function()
-			tweenService:Create(CAURADISTANCE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+			tweenService:Create(CAURADISTANCE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255), PlaceholderColor3 = Color3.fromRGB(255,255,255)}):Play()
 		end)
 		CAURADISTANCE.FocusLost:Connect(function()
 			local value = tonumber(CAURADISTANCE.Text)
@@ -1623,10 +1738,10 @@ if settings["UI"] == true then
 			COINTYPE.Text = settings["CoinType"]
 		end
 		COINTYPE.MouseEnter:Connect(function()
-			tweenService:Create(COINTYPE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+			tweenService:Create(COINTYPE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0,0,0), PlaceholderColor3 = Color3.fromRGB(0,0,0)}):Play()
 		end)
 		COINTYPE.MouseLeave:Connect(function()
-			tweenService:Create(COINTYPE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+			tweenService:Create(COINTYPE, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255), PlaceholderColor3 = Color3.fromRGB(255,255,255)}):Play()
 		end)
 		COINTYPE.FocusLost:Connect(function()
 			local value = tostring(COINTYPE.Text)
@@ -1638,10 +1753,10 @@ if settings["UI"] == true then
 			SAFEMODEOFFSET.Text = tostring(settings["SafeModeOffset"])
 		end
 		SAFEMODEOFFSET.MouseEnter:Connect(function()
-			tweenService:Create(SAFEMODEOFFSET, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+			tweenService:Create(SAFEMODEOFFSET, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0,0,0), PlaceholderColor3 = Color3.fromRGB(0,0,0)}):Play()
 		end)
 		SAFEMODEOFFSET.MouseLeave:Connect(function()
-			tweenService:Create(SAFEMODEOFFSET, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+			tweenService:Create(SAFEMODEOFFSET, TweenInfo.new(0.25, Enum.EasingStyle.Linear), {BackgroundColor3 = Color3.fromRGB(35, 35, 35), TextColor3 = Color3.fromRGB(255, 255, 255), PlaceholderColor3 = Color3.fromRGB(255,255,255)}):Play()
 		end)
 		SAFEMODEOFFSET.FocusLost:Connect(function()
 			local value = tonumber(SAFEMODEOFFSET.Text)
@@ -1888,5 +2003,228 @@ task.spawn(function()
             end
         end
         task.wait(0.05)
+    end
+end)
+
+game:GetService('StarterGui'):SetCore('SendNotification',{
+	Title = "Script Loaded!",
+	Text = "Script was made by tokyomemoriess on Discord.",
+	Duration = 2,
+})
+
+local TeleportService = game:GetService("TeleportService")
+local HttpService     = game:GetService("HttpService")
+
+local HOP_STATE_FILE     = settings["HopStateFile"] or "TokyoFarm_HopState.json"
+local MAX_HOP_ATTEMPTS   = tonumber(settings["MaxHopAttempts"]) or 10
+local MIN_PLAYER_COUNT   = tonumber(settings["MinPlayerCount"]) or 4
+local HOP_STATE_MAX_JOBS = 100
+
+local function loadHopState()
+    local state = { attempts = 0, visitedJobs = {} }
+
+    if isfile and isfile(HOP_STATE_FILE) then
+        pcall(function()
+            local data = HttpService:JSONDecode(readfile(HOP_STATE_FILE))
+            if type(data) ~= "table" then return end
+            state.attempts = tonumber(data.attempts) or 0
+
+            local vj = data.visitedJobs
+            if type(vj) == "table" then
+                for k, v in pairs(vj) do
+                    if type(k) == "number" then
+                        table.insert(state.visitedJobs, v)
+                    elseif type(k) == "string" and v == true then
+                        table.insert(state.visitedJobs, k)
+                    end
+                end
+            end
+        end)
+    end
+
+    if game.JobId and game.JobId ~= "" and not table.find(state.visitedJobs, game.JobId) then
+        table.insert(state.visitedJobs, game.JobId)
+    end
+
+    while #state.visitedJobs > HOP_STATE_MAX_JOBS do
+        table.remove(state.visitedJobs, 1)
+    end
+
+    return state
+end
+
+local function saveHopState(state)
+    if not writefile then return end
+    pcall(function()
+        writefile(HOP_STATE_FILE, HttpService:JSONEncode(state))
+    end)
+end
+
+local hopState = loadHopState()
+
+task.spawn(function()
+    task.wait(300)
+    if hopState.attempts > 0 then
+        hopState.attempts = 0
+        saveHopState(hopState)
+        setStatus("[AutoHop] Session healthy, attempt counter reset")
+    end
+end)
+
+local function httpGetJson(url)
+    local body
+
+    local providers = {
+        function() return syn and syn.request and syn.request({ Url = url, Method = "GET" }) end,
+        function() return http and http.request and http.request({ Url = url, Method = "GET" }) end,
+        function() return request and request({ Url = url, Method = "GET" }) end,
+    }
+    for _, fn in ipairs(providers) do
+        local ok, res = pcall(fn)
+        if ok and type(res) == "table" and res.Body then
+            body = res.Body
+            break
+        end
+    end
+
+    if not body then
+        local ok, raw = pcall(function() return game:HttpGet(url) end)
+        if ok and type(raw) == "string" then body = raw end
+    end
+
+    if not body then return nil end
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, body)
+    if not ok or type(data) ~= "table" then return nil end
+    return data
+end
+
+local function fetchServers()
+    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100")
+        :format(game.PlaceId)
+    local data = httpGetJson(url)
+    if not data or type(data.data) ~= "table" then return {} end
+    return data.data
+end
+
+local function pickBestServer()
+    local servers = fetchServers()
+    local candidates = {}
+
+    for _, srv in ipairs(servers) do
+        if type(srv) == "table"
+            and srv.id
+            and srv.id ~= game.JobId
+            and not table.find(hopState.visitedJobs, srv.id)
+            and (srv.playing or 0) > MIN_PLAYER_COUNT
+            and (srv.playing or 0) < (srv.maxPlayers or 999)
+        then
+            table.insert(candidates, srv)
+        end
+    end
+
+    table.sort(candidates, function(a, b)
+        local pa, pb = a.playing or 0, b.playing or 0
+        if pa ~= pb then return pa > pb end
+        return (a.id or "") > (b.id or "")
+    end)
+
+    return candidates[1]
+end
+
+local hopping = false
+
+local function rememberJob(id)
+    if not id or id == "" then return end
+    if table.find(hopState.visitedJobs, id) then return end
+    table.insert(hopState.visitedJobs, id)
+    while #hopState.visitedJobs > HOP_STATE_MAX_JOBS do
+        table.remove(hopState.visitedJobs, 1)
+    end
+end
+
+local function serverHop(reason)
+    if not settings["ServerHopEnabled"] then return end
+    if hopping then return end
+    if hopState.attempts >= MAX_HOP_ATTEMPTS then
+        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s")
+            :format(hopState.attempts, MAX_HOP_ATTEMPTS, tostring(reason)))
+        return
+    end
+
+    hopping = true
+    hopState.attempts = hopState.attempts + 1
+    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s")
+        :format(hopState.attempts, MAX_HOP_ATTEMPTS, tostring(reason)))
+
+    local wasFarming = farming
+    if wasFarming ~= nil then farming = false end
+
+    local target = pickBestServer()
+    if target then rememberJob(target.id) end
+    saveHopState(hopState)
+
+    local ok, err
+    if target then
+        ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, players.LocalPlayer)
+        end)
+    else
+        setStatus("[AutoHop] No suitable server found, falling back to random teleport")
+        ok, err = pcall(function()
+            TeleportService:Teleport(game.PlaceId, players.LocalPlayer)
+        end)
+    end
+
+    if not ok then
+        setStatus("[AutoHop] Teleport failed: " .. tostring(err))
+        if wasFarming ~= nil then farming = wasFarming end
+        hopping = false
+    end
+end
+
+if queue_on_teleport and getgenv().TokyoFarmSourceURL then
+    pcall(function()
+        queue_on_teleport("loadstring(game:HttpGet('" .. getgenv().TokyoFarmSourceURL .. "'))()")
+    end)
+end
+
+game.OnClose = function()
+    serverHop("OnClose (kick / shutdown / disconnect)")
+end
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        local lp = players.LocalPlayer
+        if lp and not lp.Parent then
+            serverHop("LocalPlayer removed from Players (kick)")
+            break
+        end
+    end
+end)
+
+task.spawn(function()
+    task.wait(settings["HopGracePeriod"] or 12)
+    local lowSince = nil
+
+    while true do
+        task.wait(settings["HopCheckInterval"] or 3)
+
+        local count     = #players:GetPlayers()
+        local threshold = MIN_PLAYER_COUNT
+
+        if count <= threshold then
+            local shouldSkip = (not settings["HopMidRound"]) and roundStarted and farming
+            if not shouldSkip then
+                if not lowSince then
+                    lowSince = os.time()
+                elseif os.time() - lowSince >= (settings["HopLowCountDuration"] or 15) then
+                    lowSince = nil
+                    serverHop(("Low player count: %d <= %d"):format(count, threshold))
+                end
+            end
+        else
+            lowSince = nil
+        end
     end
 end)
