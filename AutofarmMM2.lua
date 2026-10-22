@@ -2674,7 +2674,7 @@ local hopState = loadHopState()
 
 task.spawn(function()
     task.wait(300)
-    if hopState.attempts > 0 then
+    if settings["ServerHopEnabled"] and hopState.attempts > 0 then
         hopState.attempts = 0
         saveHopState(hopState)
         setStatus("[AutoHop] Session healthy, attempt counter reset")
@@ -2800,8 +2800,21 @@ if queue_on_teleport and getgenv().TokyoFarmSourceURL then
     end)
 end
 
+task.spawn(function()
+    local message = workspace:WaitForChild("Message")
+    if message then
+        serverHop("Roblox Server Shutdown")
+    end
+end)
+
 game.OnClose = function()
-    serverHop("OnClose (kick / shutdown / disconnect)")
+    local lp = players.LocalPlayer
+    task.defer(function()
+        if lp and lp.Parent then
+            task.wait(0.1) 
+            serverHop("Connection lost / Kicked")
+        end
+    end)
 end
 
 task.spawn(function()
@@ -2821,6 +2834,11 @@ task.spawn(function()
 
     while true do
         task.wait(settings["HopCheckInterval"] or 3)
+        
+        if not settings["ServerHopEnabled"] then
+            lowSince = nil
+            continue
+        end
 
         local count = #players:GetPlayers()
 
