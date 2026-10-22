@@ -2194,7 +2194,7 @@ if settings["UI"] == true then
 		Subtitle.Position = UDim2.new(0, 28, 0.5, 1)
 		Subtitle.BackgroundTransparency = 1
 		Subtitle.Font = FONT
-		Subtitle.Text = "Reworked • v3"
+		Subtitle.Text = "Reworked • V3"
 		Subtitle.TextColor3 = COLORS.textDim
 		Subtitle.TextSize = 9
 		Subtitle.TextXAlignment = Enum.TextXAlignment.Left
