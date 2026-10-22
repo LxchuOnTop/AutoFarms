@@ -2885,17 +2885,35 @@ task.spawn(function()
 	playerGui:SetAttribute("Device", "Phone")
 	
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
-	ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Extras"):WaitForChild("ChangeLastDevice"):FireServer("Phone")
+	pcall(function()
+		ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Extras"):WaitForChild("ChangeLastDevice"):FireServer("Phone")
+	end)
 	
-	local guiFolder = ReplicatedStorage:FindFirstChild("GUI")
-	if guiFolder and guiFolder:FindFirstChild("MainMobile") then
-		local oldGui = playerGui:FindFirstChild("MainGUI")
-		if oldGui then
-			oldGui:Destroy()
-		end
+	local function swapUI()
+		local guiFolder = ReplicatedStorage:FindFirstChild("GUI")
+		if not guiFolder or not guiFolder:FindFirstChild("MainMobile") then return end
+
+		local pcGui = playerGui:FindFirstChild("MainGUI")
 		
-		local newGui = guiFolder.MainMobile:Clone()
-		newGui.Name = "MainGUI"
-		newGui.Parent = playerGui
+		if pcGui and not pcGui:GetAttribute("IsMobileSwapped") then
+			pcGui.Visible = false
+			pcGui:SetAttribute("IsMobileSwapped", true)
+			
+			-- Check if we already added the mobile one
+			if not playerGui:FindFirstChild("MainMobileUI") then
+				local mobileGui = guiFolder.MainMobile:Clone()
+				mobileGui.Name = "MainMobileUI"
+				mobileGui.Parent = playerGui
+			end
+		end
 	end
+
+	swapUI()
+
+	playerGui.ChildAdded:Connect(function(child)
+		if child.Name == "MainGUI" then
+			task.wait(0.1)
+			swapUI()
+		end
+	end)
 end)
