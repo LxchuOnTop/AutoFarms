@@ -693,6 +693,71 @@ local function hasKnife()
 	return character:FindFirstChild("Knife") ~= nil or (player.Backpack and player.Backpack:FindFirstChild("Knife") ~= nil)
 end
 
+local function resetForAction()
+    if currentFarmHandle and currentFarmHandle.Cancel then
+        pcall(function() currentFarmHandle:Cancel() end)
+        currentFarmHandle = nil
+    end
+
+    safeHold.active = false
+    safeHold.tweening = false
+    safeHold.targetCFrame = nil
+    physicsSettled = false
+
+    if floatForce then
+        pcall(function() floatForce:Destroy() end)
+        floatForce = nil
+    end
+
+    if humanoid and humanoid.Parent then
+        humanoid.EvaluateStateMachine = true
+        humanoid.PlatformStand = false
+        humanoid.AutoRotate = true
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+        end)
+    end
+
+    if character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local n = part.Name
+                if n == "Head" or n == "UpperTorso" or n == "LowerTorso" or n == "Torso" then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+    if humanoidRootPart and humanoidRootPart.Parent then
+        humanoidRootPart.CanCollide = true
+        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    if character then
+        local animateScript = character:FindFirstChild("Animate")
+        if animateScript then animateScript.Enabled = true end
+    end
+    if humanoid and humanoid.Parent and not humanoid:FindFirstChildOfClass("Animator") then
+        local animator = Instance.new("Animator")
+        animator.Parent = humanoid
+    end
+
+    physicsDisabled = false
+
+    if humanoidRootPart and humanoidRootPart.Parent then
+        humanoidRootPart.CFrame = startPosition
+        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+    end
+    if humanoid and humanoid.Parent then
+        pcall(function()
+            humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+        end)
+    end
+end
+
 local function functionInnocentSheriffHeroMurderer()
     if not (player and player.Character and humanoid and humanoidRootPart) then return end
     if not (roundStarted and fullBag and alive) then return end
@@ -794,71 +859,6 @@ local function functionInnocentSheriffHeroMurderer()
             character.Humanoid.Health = 0
         end
         return
-    end
-end
-
-local function resetForAction()
-    if currentFarmHandle and currentFarmHandle.Cancel then
-        pcall(function() currentFarmHandle:Cancel() end)
-        currentFarmHandle = nil
-    end
-
-    safeHold.active = false
-    safeHold.tweening = false
-    safeHold.targetCFrame = nil
-    physicsSettled = false
-
-    if floatForce then
-        pcall(function() floatForce:Destroy() end)
-        floatForce = nil
-    end
-
-    if humanoid and humanoid.Parent then
-        humanoid.EvaluateStateMachine = true
-        humanoid.PlatformStand = false
-        humanoid.AutoRotate = true
-        pcall(function()
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
-        end)
-    end
-
-    if character then
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                local n = part.Name
-                if n == "Head" or n == "UpperTorso" or n == "LowerTorso" or n == "Torso" then
-                    part.CanCollide = true
-                end
-            end
-        end
-    end
-    if humanoidRootPart and humanoidRootPart.Parent then
-        humanoidRootPart.CanCollide = true
-        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-    end
-
-    if character then
-        local animateScript = character:FindFirstChild("Animate")
-        if animateScript then animateScript.Enabled = true end
-    end
-    if humanoid and humanoid.Parent and not humanoid:FindFirstChildOfClass("Animator") then
-        local animator = Instance.new("Animator")
-        animator.Parent = humanoid
-    end
-
-    physicsDisabled = false
-
-    if humanoidRootPart and humanoidRootPart.Parent then
-        humanoidRootPart.CFrame = startPosition
-        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-    end
-    if humanoid and humanoid.Parent then
-        pcall(function()
-            humanoid:ChangeState(Enum.HumanoidStateType.Running)
-            humanoid:ChangeState(Enum.HumanoidStateType.Landed)
-        end)
     end
 end
 
