@@ -694,113 +694,172 @@ local function hasKnife()
 end
 
 local function functionInnocentSheriffHeroMurderer()
-	if not (player and player.Character and humanoid and humanoidRootPart) then return end
-	if not (roundStarted and fullBag and alive) then return end
+    if not (player and player.Character and humanoid and humanoidRootPart) then return end
+    if not (roundStarted and fullBag and alive) then return end
 
-	local iAmMurderer = hasKnife()
+    resetForAction()
+    task.wait(0.2)
 
-	if settings["KillEveryoneIfDone"] and iAmMurderer then
-		local knife = character:FindFirstChild("Knife")
-			or (player.Backpack and player.Backpack:FindFirstChild("Knife"))
+    local iAmMurderer = hasKnife()
 
-		if not knife then
-			setStatus("STATUS: No Knife — can't kill everyone")
-			return
-		end
+    if settings["KillEveryoneIfDone"] and iAmMurderer then
+        local knife = character:FindFirstChild("Knife")
+            or (player.Backpack and player.Backpack:FindFirstChild("Knife"))
 
-		if knife.Parent == player.Backpack then
-			humanoid:EquipTool(knife)
-			task.wait(0.2)
-		end
+        if not knife then
+            setStatus("STATUS: No Knife — can't kill everyone")
+            return
+        end
 
-		setStatus("STATUS: Filled Bag! Killing Everyone...")
+        if knife.Parent == player.Backpack then
+            humanoid:EquipTool(knife)
+            task.wait(0.3)
+        end
 
-		local killed = {}
-		local maxPasses = 3
-		local killsPerTarget = 8
+        setStatus("STATUS: Filled Bag! Killing Everyone...")
 
-		for pass = 1, maxPasses do
-			local anyAlive = false
-			for _, other in ipairs(players:GetPlayers()) do
-				if other ~= player and not killed[other] then
-					local oChar = other.Character
-					local oHum  = oChar and oChar:FindFirstChildOfClass("Humanoid")
-					local oHRP  = oChar and oChar:FindFirstChild("HumanoidRootPart")
-					if oHum and oHum.Health > 0 and oHRP then
-						anyAlive = true
-						local origin = humanoidRootPart.CFrame
+        local killed = {}
+        local maxPasses = 3
+        local killsPerTarget = 8
 
-						oHRP.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, -0.5)
-						task.wait(0.15)
+        for pass = 1, maxPasses do
+            local anyAlive = false
+            for _, other in ipairs(players:GetPlayers()) do
+                if other ~= player and not killed[other] then
+                    local oChar = other.Character
+                    local oHum  = oChar and oChar:FindFirstChildOfClass("Humanoid")
+                    local oHRP  = oChar and oChar:FindFirstChild("HumanoidRootPart")
+                    if oHum and oHum.Health > 0 and oHRP then
+                        anyAlive = true
+                        oHRP.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, -0.5)
+                        task.wait(0.15)
 
-						for i = 1, killsPerTarget do
-							local eq = character:FindFirstChild("Knife")
-							if eq and eq:FindFirstChild("Stab") then
-								pcall(function()
-									eq.Stab:FireServer("Slash")
-								end)
-							end
-							task.wait(0.04)
-						end
+                        for i = 1, killsPerTarget do
+                            local eq = character:FindFirstChild("Knife")
+                            if eq and eq:FindFirstChild("Stab") then
+                                pcall(function() eq.Stab:FireServer("Slash") end)
+                            end
+                            task.wait(0.04)
+                        end
 
-						if oHum.Health <= 0 then
-							killed[other] = true
-							other:SetAttribute('AmIAlive', nil)
-						end
+                        if oHum.Health <= 0 then
+                            killed[other] = true
+                            other:SetAttribute('AmIAlive', nil)
+                        end
+                    else
+                        killed[other] = true
+                    end
+                end
+            end
+            if not anyAlive then break end
+            task.wait(0.1)
+        end
 
-						humanoidRootPart.CFrame = origin
-					else
-						killed[other] = true
-					end
-				end
-			end
-			if not anyAlive then break end
-			task.wait(0.1)
-		end
+        humanoidRootPart.CFrame = startPosition
+        return
+    end
 
-		humanoidRootPart.CFrame = startPosition
-		return
-	end
+    if settings["ShootMurdererIfDone"] and not iAmMurderer then
+        local murderer = nil
+        for _, other in ipairs(players:GetPlayers()) do
+            if other ~= player and other.Character then
+                local oChar = other.Character
+                local oHasKnife = oChar:FindFirstChild("Knife")
+                    or (other.Backpack and other.Backpack:FindFirstChild("Knife"))
+                if oHasKnife then
+                    murderer = other
+                    break
+                end
+            end
+        end
 
-	if settings["ShootMurdererIfDone"] and not iAmMurderer then
-		local murderer = nil
-		for _, other in ipairs(players:GetPlayers()) do
-			if other ~= player and other.Character then
-				local oChar = other.Character
-				local oHasKnife = oChar:FindFirstChild("Knife")
-					or (other.Backpack and other.Backpack:FindFirstChild("Knife"))
-				if oHasKnife then
-					murderer = other
-					break
-				end
-			end
-		end
+        if murderer then
+            setStatus("STATUS: Filled Bag! Flinging Murderer...")
+            flingActive = true
+            pcall(OdhSkid, murderer, 3)
+            flingActive = false
+            humanoidRootPart.CFrame = startPosition
+            resetForAction()
+            setStatus("STATUS: Murderer flung!")
+        else
+            setStatus("STATUS: Filled Bag! Murderer not found.")
+        end
+        return
+    end
 
-		if murderer then
-			setStatus("STATUS: Filled Bag! Flinging Murderer...")
-			restorePhysics()
-			task.wait(0.1)
-			flingActive = true
-			pcall(OdhSkid, murderer, 3)
-			flingActive = false
-			humanoidRootPart.CFrame = startPosition
-			restorePhysics()
-			setStatus("STATUS: Murderer flung!")
-		else
-			setStatus("STATUS: Filled Bag! Murderer not found.")
-		end
-		return
-	end
+    if settings["ResetIfDone"] then
+        if character:FindFirstChild("Humanoid") then
+            setStatus("STATUS: Filled Bag! Resetting...")
+            task.wait(0.1)
+            character.Humanoid.Health = 0
+        end
+        return
+    end
+end
 
-	if settings["ResetIfDone"] then
-		if character:FindFirstChild("Humanoid") then
-			setStatus("STATUS: Filled Bag! Resetting...")
-			humanoidRootPart.CFrame = startPosition
-			task.wait(settings["TweenDelay"])
-			character.Humanoid.Health = 0
-		end
-		return
-	end
+local function resetForAction()
+    if currentFarmHandle and currentFarmHandle.Cancel then
+        pcall(function() currentFarmHandle:Cancel() end)
+        currentFarmHandle = nil
+    end
+
+    safeHold.active = false
+    safeHold.tweening = false
+    safeHold.targetCFrame = nil
+    physicsSettled = false
+
+    if floatForce then
+        pcall(function() floatForce:Destroy() end)
+        floatForce = nil
+    end
+
+    if humanoid and humanoid.Parent then
+        humanoid.EvaluateStateMachine = true
+        humanoid.PlatformStand = false
+        humanoid.AutoRotate = true
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+        end)
+    end
+
+    if character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local n = part.Name
+                if n == "Head" or n == "UpperTorso" or n == "LowerTorso" or n == "Torso" then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+    if humanoidRootPart and humanoidRootPart.Parent then
+        humanoidRootPart.CanCollide = true
+        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    if character then
+        local animateScript = character:FindFirstChild("Animate")
+        if animateScript then animateScript.Enabled = true end
+    end
+    if humanoid and humanoid.Parent and not humanoid:FindFirstChildOfClass("Animator") then
+        local animator = Instance.new("Animator")
+        animator.Parent = humanoid
+    end
+
+    physicsDisabled = false
+
+    if humanoidRootPart and humanoidRootPart.Parent then
+        humanoidRootPart.CFrame = startPosition
+        humanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        humanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+    end
+    if humanoid and humanoid.Parent then
+        pcall(function()
+            humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+        end)
+    end
 end
 
 local function returnToStartPosition()
