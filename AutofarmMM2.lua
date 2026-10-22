@@ -2862,7 +2862,7 @@ local function saveSettings()
 end
 
 task.spawn(function()
-    task.wait(3)
+	repeat task.wait() until game:IsLoaded()
     if _G.Notify then
         _G.Notify("Script Loaded!", "Made by tokyomemoriess on Discord.")
     else
@@ -2872,5 +2872,6 @@ task.spawn(function()
             Duration = 2,
         })
     end
-	game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Extras"):WaitForChild("ChangeLastDevice"):FireServer("Phone")
+	local args = {"Phone"}
+	game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Extras"):WaitForChild("ChangeLastDevice"):FireServer(unpack(args) or "Phone")
 end)
