@@ -2319,7 +2319,7 @@ if settings["UI"] == true then
 			tab.Position = UDim2.new(0, 7, 0, 5)
 			tab.BackgroundTransparency = 1
 			tab.BorderSizePixel = 0
-			tab.ScrollBarThickness = 3
+			tab.ScrollBarThickness = 0
 			tab.ScrollBarImageColor3 = COLORS.border
 			tab.CanvasSize = UDim2.new(0, 0, 0, 0)
 			tab.AutomaticCanvasSize = Enum.AutomaticSize.Y
