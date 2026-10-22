@@ -671,7 +671,6 @@ local function teleportFunction(cframe, duration, ifCoin)
 			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
 				ifCoin.CFrame = humanoidRootPart.CFrame
 			end
-			task.wait(settings["TweenDelay"])
 		end)
 
 		function handle:Cancel()
@@ -1022,7 +1021,7 @@ local function startFarmingLoop()
 				if not processed then
 					task.wait(settings["TweenDelay"])
 				else
-					task.wait()
+					task.wait(settings["TweenDelay"])
 				end
 			end)
 			if not ok then
@@ -1667,7 +1666,7 @@ if settings["UI"] == true then
 		DELAY.FocusLost:Connect(function()
 			local value = tonumber(DELAY.Text)
 			if value then
-				settings["TweenDelay"] = value
+				settings["TweenDelay"] = math.clamp(value, 0.01, 5)
 			end
 		end)
 		if settings["CoinAuraDistance"] then
