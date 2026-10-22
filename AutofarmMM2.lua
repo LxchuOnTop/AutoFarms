@@ -2863,15 +2863,39 @@ end
 
 task.spawn(function()
 	repeat task.wait() until game:IsLoaded()
-    if _G.Notify then
-        _G.Notify("Script Loaded!", "Made by tokyomemoriess on Discord.")
-    else
-        game:GetService('StarterGui'):SetCore('SendNotification',{
-            Title = "Script Loaded!",
-            Text = "Script was made by tokyomemoriess on Discord.",
-            Duration = 2,
-        })
-    end
-	local args = {"Phone"}
-	game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Extras"):WaitForChild("ChangeLastDevice"):FireServer(unpack(args) or "Phone")
+	
+	if _G.Notify then
+		_G.Notify("Script Loaded!", "Made by tokyomemoriess on Discord.")
+	else
+		game:GetService('StarterGui'):SetCore('SendNotification',{
+			Title = "Script Loaded!",
+			Text = "Script was made by tokyomemoriess on Discord.",
+			Duration = 2,
+		})
+	end
+
+	local UserInputService = game:GetService("UserInputService")
+	if UserInputService.MouseEnabled then
+		return
+	end
+
+	_G.MobileDevice = "Phone"
+	local player = game.Players.LocalPlayer
+	local playerGui = player:WaitForChild("PlayerGui")
+	playerGui:SetAttribute("Device", "Phone")
+	
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Extras"):WaitForChild("ChangeLastDevice"):FireServer("Phone")
+	
+	local guiFolder = ReplicatedStorage:FindFirstChild("GUI")
+	if guiFolder and guiFolder:FindFirstChild("MainMobile") then
+		local oldGui = playerGui:FindFirstChild("MainGUI")
+		if oldGui then
+			oldGui:Destroy()
+		end
+		
+		local newGui = guiFolder.MainMobile:Clone()
+		newGui.Name = "MainGUI"
+		newGui.Parent = playerGui
+	end
 end)
