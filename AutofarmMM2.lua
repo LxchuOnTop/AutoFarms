@@ -2889,44 +2889,31 @@ task.spawn(function()
 		ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Extras"):WaitForChild("ChangeLastDevice"):FireServer("Phone")
 	end)
 	
-	local function clickButton(btn)
+	local function clickUI(btn)
 		if not btn then return end
+		
 		if firesignal then
 			pcall(firesignal, btn.MouseButton1Click)
-		elseif getconnections then
-			for _, c in pairs(getconnections(btn.MouseButton1Click)) do
-				pcall(c.Fire)
-			end
 		end
-	end
-
-	local function handleGui(gui)
-		if gui.Name == "DeviceSelect" then
-			local container = gui:WaitForChild("Container", 3)
-			if container then
-				local phone = container:FindFirstChild("Phone")
-				if phone then
-					local btn = phone:FindFirstChild("Button")
-					if btn then clickButton(btn) end
+		
+		if getconnections then
+			pcall(function()
+				for _, conn in pairs(getconnections(btn.MouseButton1Click)) do
+					conn:Fire()
 				end
-			end
-		elseif gui.Name == "Join" or gui.Name == "JoinPhone" then
-			local friends = gui:WaitForChild("Friends", 3)
-			if friends then
-				local playBtn = friends:FindFirstChild("Play")
-				if playBtn then clickButton(playBtn) end
-			end
+			end)
+		end
+		
+		local vu = game:GetService("VirtualUser")
+		if vu then
+			local pos = btn.AbsolutePosition + (btn.AbsoluteSize / 2)
+			pcall(function()
+				vu:CaptureController()
+				vu:ClickButton1(pos)
+			end)
 		end
 	end
 
-	for _, child in ipairs(playerGui:GetChildren()) do
-		task.spawn(handleGui, child)
-	end
-
-	playerGui.ChildAdded:Connect(function(child)
-		task.spawn(handleGui, child)
-	end)
-	
 	local function forceMobileUI()
 		local guiFolder = ReplicatedStorage:FindFirstChild("GUI")
 		if not guiFolder or not guiFolder:FindFirstChild("MainMobile") then return end
@@ -2944,12 +2931,41 @@ task.spawn(function()
 		end
 	end
 
-	forceMobileUI()
-
-	playerGui.ChildAdded:Connect(function(child)
-		if child.Name == "MainGUI" and not child:GetAttribute("IsMobile") then
+	local function handleGui(gui)
+		if gui.Name == "DeviceSelect" then
+			local container = gui:WaitForChild("Container", 10)
+			if container then
+				local phone = container:FindFirstChild("Phone")
+				if phone then
+					local btn = phone:FindFirstChild("Button")
+					if btn then
+						task.wait(0.5)
+						clickUI(btn)
+					end
+				end
+			end
+		elseif gui.Name == "Join" or gui.Name == "JoinPhone" then
+			local friends = gui:WaitForChild("Friends", 10)
+			if friends then
+				local playBtn = friends:FindFirstChild("Play")
+				if playBtn then
+					task.wait(0.5)
+					clickUI(playBtn)
+				end
+			end
+		elseif gui.Name == "MainGUI" then
 			task.wait(0.1)
 			forceMobileUI()
 		end
+	end
+
+	for _, child in ipairs(playerGui:GetChildren()) do
+		task.spawn(handleGui, child)
+	end
+
+	playerGui.ChildAdded:Connect(function(child)
+		task.spawn(handleGui, child)
 	end)
+	
+	forceMobileUI()
 end)
