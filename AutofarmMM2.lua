@@ -1,5 +1,18 @@
 -- Scripted by TokyoMemoriess
 
+if getgenv().TokyoFarmExecuted then
+    local playerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, name in ipairs({"TokyoUI", "Lxchu", "UI"}) do
+            local oldGui = playerGui:FindFirstChild(name)
+            if oldGui then oldGui:Destroy() end
+        end
+    end
+    return
+end
+
+getgenv().TokyoFarmExecuted = true
+
 local SETTINGS_FILE = "TokyoFarm_Settings.json"
 getgenv().TokyoFarmSourceURL = 'https://raw.githubusercontent.com/TokyoMemoriess/AutoFarms/refs/heads/main/AutofarmMM2.lua'
 
@@ -3128,9 +3141,13 @@ local function serverHop(reason)
     hopState.lastHoppedFrom = game.JobId
     saveHopState(hopState)
 
-    if queue_on_teleport and getgenv().TokyoFarmSourceURL then
+    if queue_on_teleport then
         pcall(function()
-            queue_on_teleport("loadstring(game:HttpGet('" .. getgenv().TokyoFarmSourceURL .. "'))()")
+            if syn and syn.queue_on_teleport then
+                syn.queue_on_teleport({ "loadstring(game:HttpGet('" .. getgenv().TokyoFarmSourceURL .. "'))()" })
+            else
+                queue_on_teleport("loadstring(game:HttpGet('" .. getgenv().TokyoFarmSourceURL .. "'))()")
+            end
         end)
     end
 
