@@ -25,8 +25,8 @@ local settings = {
 	["HopMidRound"] = false,
 	["ExploiterHopEnabled"] = false,
 	["MinExploitersToHop"] = 1,
-	["ExploiterViolationThreshold"] = 6,
-	["ExploiterFlagCooldown"] = 30,
+	["ExploiterViolationThreshold"] = 20,
+	["ExploiterFlagCooldown"] = 15,
 	["ExploiterMinMoveDistance"] = 1.5,
 	["ExploiterSampleRate"] = 0.1,
 	["HopStateFile"] = "TokyoFarm_HopState.json",
@@ -2972,26 +2972,37 @@ end)
 
 local function httpGetJson(url)
     local body
+    local headers = {
+        ["User-Agent"] = "Roblox/WinInet",
+        ["Accept"] = "application/json"
+    }
 
     local providers = {
-        function() return syn and syn.request and syn.request({ Url = url, Method = "GET" }) end,
-        function() return http and http.request and http.request({ Url = url, Method = "GET" }) end,
-        function() return request and request({ Url = url, Method = "GET" }) end,
+        function() return syn and syn.request and syn.request({ Url = url, Method = "GET", Headers = headers }) end,
+        function() return http and http.request and http.request({ Url = url, Method = "GET", Headers = headers }) end,
+        function() return request and request({ Url = url, Method = "GET", Headers = headers }) end,
+        function() return http_request and http_request({ Url = url, Method = "GET", Headers = headers }) end,
     }
     for _, fn in ipairs(providers) do
         local ok, res = pcall(fn)
         if ok and type(res) == "table" and res.Body then
-            body = res.Body
-            break
+            if not res.StatusCode or res.StatusCode == 200 then
+                body = res.Body
+                break
+            end
         end
     end
 
     if not body then
         local ok, raw = pcall(function() return game:HttpGet(url) end)
-        if ok and type(raw) == "string" then body = raw end
+        if ok and type(raw) == "string" then 
+            body = raw 
+        end
     end
 
     if not body then return nil end
+    if string.sub(body, 1, 1) ~= "{" then return nil end
+    
     local ok, data = pcall(httpService.JSONDecode, httpService, body)
     if not ok or type(data) ~= "table" then return nil end
     return data
@@ -3005,7 +3016,7 @@ local function fetchServers()
     return data.data
 end
 
-local function pickBestServer(ignoreMinPlayers)
+local function pickBestServer(ignoreMinPlayers, ignoreVisited)
     local servers = fetchServers()
     local candidates = {}
     local currentJob = tostring(game.JobId):lower()
@@ -3018,10 +3029,12 @@ local function pickBestServer(ignoreMinPlayers)
             
             if srvId ~= currentJob then
                 local isVisited = false
-                for _, v in ipairs(hopState.visitedJobs) do
-                    if type(v) == "string" and v:lower() == srvId then
-                        isVisited = true
-                        break
+                if not ignoreVisited then
+                    for _, v in ipairs(hopState.visitedJobs) do
+                        if type(v) == "string" and v:lower() == srvId then
+                            isVisited = true
+                            break
+                        end
                     end
                 end
 
@@ -3089,7 +3102,11 @@ local function serverHop(reason)
     end
 
     if not target then
-        target = pickBestServer(true)
+        target = pickBestServer(true, false)
+    end
+
+    if not target then
+        target = pickBestServer(true, true)
     end
 
     if not target then
@@ -3159,7 +3176,7 @@ end)
 
 local function hasActiveAnimation(hum)
     for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
-        if track.WeightCurrent > 0.4 and track.Speed ~= 0 then
+        if track.IsPlaying and track.WeightCurrent > 0.1 and track.Speed ~= 0 then
             return true
         end
     end
@@ -3196,10 +3213,17 @@ local function trackPlayerForExploit(p)
             local char = p.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             local hum = char and char:FindFirstChildOfClass("Humanoid")
+            
             if hrp and hum and hum.Health > 0 then
                 local now = os.clock()
                 local pos = hrp.Position
                 local minDist = tonumber(settings["ExploiterMinMoveDistance"]) or 1.5
+                local state = hum:GetState()
+                local vel = hrp.AssemblyLinearVelocity.Magnitude
+                
+                local isGroundState = (state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics or state == Enum.HumanoidStateType.Landed)
+                local isPhysicsState = (state == Enum.HumanoidStateType.Physics)
+                local isSafeState = (state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Seated or state == Enum.HumanoidStateType.Climbing or state == Enum.HumanoidStateType.Swimming or state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.GettingUp)
                 
                 if tr.lastPos and tr.lastTime and tr.samplesSeen >= 2 then
                     local dt = now - tr.lastTime
@@ -3207,46 +3231,50 @@ local function trackPlayerForExploit(p)
                         local delta = pos - tr.lastPos
                         local dist = delta.Magnitude
                         
-                        if dist > minDist then
-                            -- Teleport Filter: Ignore huge instant jumps (teleport pads, round transitions)
+                        if dist > minDist and not isSafeState then
+                            -- Teleport Filter: Ignore huge instant jumps
                             if dist > 100 then
                                 tr.violations = 0
                                 tr.directionHistory = {}
                             else
-                                local pts = 0
-                                if hrp.AssemblyLinearVelocity.Magnitude < 3 then
-                                    pts = pts + 3
-                                end
-                                if not hasActiveAnimation(hum) then
-                                    pts = pts + 2
-                                end
-                                if dist > 1 then
-                                    table.insert(tr.directionHistory, delta.Unit)
-                                    if #tr.directionHistory > 6 then
-                                        table.remove(tr.directionHistory, 1)
+                                if isPhysicsState and vel > 15 then
+                                    tr.violations = 0
+                                else
+                                    local pts = 0
+                                    
+                                    if vel < 2 then
+                                        pts = pts + 2
                                     end
-                                    if isStraightLine(tr.directionHistory) then
-                                        pts = pts + 1
+                                    
+                                    if not hasActiveAnimation(hum) then
+                                        pts = pts + 2
                                     end
-                                end
-                                if hum:GetState() == Enum.HumanoidStateType.Physics then
-                                    pts = pts + 1
-                                end
-                                
-                                if pts > 0 then
-                                    tr.violations = tr.violations + pts
-                                    tr.lastViolation = now
+                                    
+                                    if dist > 1 then
+                                        table.insert(tr.directionHistory, delta.Unit)
+                                        if #tr.directionHistory > 6 then
+                                            table.remove(tr.directionHistory, 1)
+                                        end
+                                        if isStraightLine(tr.directionHistory) then
+                                            pts = pts + 1
+                                        end
+                                    end
+                                    
+                                    if pts > 0 then
+                                        tr.violations = tr.violations + pts
+                                        tr.lastViolation = now
+                                    end
                                 end
                             end
                         else
                             tr.directionHistory = {}
                         end
                         
-                        if now - tr.lastViolation > 4 then
-                            tr.violations = math.max(0, tr.violations - 1)
+                        if now - tr.lastViolation > 1.5 then
+                            tr.violations = math.max(0, tr.violations - 5)
                         end
                         
-                        local need = tonumber(settings["ExploiterViolationThreshold"]) or 6
+                        local need = tonumber(settings["ExploiterViolationThreshold"]) or 20
                         if tr.violations >= need then
                             flaggedExploiters[p] = now
                         end
