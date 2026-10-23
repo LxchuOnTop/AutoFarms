@@ -1,5 +1,85 @@
--- fling by TokyoMemoriess
-local player = game:GetService("Players").LocalPlayer
+local players = game:GetService("Players")
+
+local tracked = {}
+
+local function enforce(part)
+    if part.CanCollide then
+        part.CanCollide = false
+    end
+end
+
+local function hookPart(char, part)
+    if not part:IsA("BasePart") then return end
+    local data = tracked[char]
+    if not data then return end
+
+    data.parts[part] = true
+    enforce(part)
+
+    part:GetPropertyChangedSignal("CanCollide"):Connect(function()
+        if tracked[char] and part.CanCollide then
+            part.CanCollide = false
+        end
+    end)
+end
+
+local function trackCharacter(char)
+    if tracked[char] then return end
+    tracked[char] = { parts = {} }
+
+    for _, d in ipairs(char:GetDescendants()) do
+        hookPart(char, d)
+    end
+
+    char.DescendantAdded:Connect(function(d)
+        if tracked[char] then
+            hookPart(char, d)
+        end
+    end)
+
+    char.DescendantRemoving:Connect(function(d)
+        local data = tracked[char]
+        if data then
+            data.parts[d] = nil
+        end
+    end)
+
+    char.Destroying:Connect(function()
+        tracked[char] = nil
+    end)
+end
+
+local function onPlayer(p)
+    if p == players.LocalPlayer then return end
+    if p.Character then
+        trackCharacter(p.Character)
+    end
+    p.CharacterAdded:Connect(trackCharacter)
+end
+
+for _, p in ipairs(players:GetPlayers()) do
+    onPlayer(p)
+end
+
+players.PlayerAdded:Connect(onPlayer)
+
+game:GetService('RunService').Stepped:Connect(function()
+    for char, data in pairs(tracked) do
+        if not char.Parent then
+            tracked[char] = nil
+            continue
+        end
+        for part in pairs(data.parts) do
+            if not part.Parent then
+                data.parts[part] = nil
+            elseif part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+local player = players.LocalPlayer
 flingActive = false
 
 local function OdhSkid(TargetPlayer, duration)
@@ -171,6 +251,85 @@ local function OdhSkid(TargetPlayer, duration)
 	end
 end
 
+local playerData = {}
+
+task.spawn(function()
+	local remotes, gameplay, pdc
+
+	for _ = 1, 30 do
+		remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+		if remotes then
+			gameplay = remotes:FindFirstChild("Gameplay")
+			if gameplay then
+				pdc = gameplay:FindFirstChild("PlayerDataChanged")
+				if pdc then break end
+			end
+		end
+		task.wait(0.5)
+	end
+
+	if not pdc then
+		warn("[ODH] MM2 PlayerDataChanged not found — role detection will rely on Knife/Gun only.")
+		return
+	end
+
+	pdc.OnClientEvent:Connect(function(data)
+		if type(data) == "table" then
+			playerData = data
+		end
+	end)
+end)
+
+workspace.ChildRemoved:Connect(function(ch)
+	if ch:FindFirstChild("CoinContainer") and ch:FindFirstChild("Spawns") then
+		playerData = {}
+	end
+end)
+
+local function findMurderer()
+	for playerName, data in pairs(playerData) do
+		if type(data) == "table" and data.Role == "Murderer" then
+			local p = players:FindFirstChild(playerName)
+			if p then return p end
+		end
+	end
+
+	for _, p in ipairs(players:GetPlayers()) do
+		if p.Backpack and p.Backpack:FindFirstChild("Knife") then
+			return p
+		end
+	end
+
+	for _, p in ipairs(players:GetPlayers()) do
+		if p.Character and p.Character:FindFirstChild("Knife") then
+			return p
+		end
+	end
+	return nil
+end
+
+local function findSheriff()
+	for playerName, data in pairs(playerData) do
+		if type(data) == "table" and data.Role == "Sheriff" then
+			local p = players:FindFirstChild(playerName)
+			if p then return p end
+		end
+	end
+
+	for _, p in ipairs(players:GetPlayers()) do
+		if p.Backpack and p.Backpack:FindFirstChild("Gun") then
+			return p
+		end
+	end
+	
+	for _, p in ipairs(players:GetPlayers()) do
+		if p.Character and p.Character:FindFirstChild("Gun") then
+			return p
+		end
+	end
+	return nil
+end
+
 local odhPlayers = game:GetService("Players")
 local odhUIS = game:GetService("UserInputService")
 local odhTS = game:GetService("TweenService")
@@ -211,7 +370,7 @@ odhGui.IgnoreGuiInset = true
 odhGui.Parent = player:WaitForChild("PlayerGui")
 
 local odhFrame = Instance.new("Frame")
-odhFrame.Size = UDim2.new(0, 340, 0, 200)
+odhFrame.Size = UDim2.new(0, 340, 0, 230)
 odhFrame.Position = UDim2.new(0.5, -170, 0, 60)
 odhFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
 odhFrame.BorderSizePixel = 0
@@ -234,7 +393,7 @@ odhTitle.Size = UDim2.new(1, -44, 0, 26)
 odhTitle.Position = UDim2.new(0, 14, 0, 6)
 odhTitle.BackgroundTransparency = 1
 odhTitle.Font = Enum.Font.SourceSansBold
-odhTitle.Text = "Fling by TokyoMemoriess"
+odhTitle.Text = "ODH SKID"
 odhTitle.TextSize = 15
 odhTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 odhTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -344,9 +503,36 @@ odhMatch.TextColor3 = Color3.fromRGB(140, 140, 140)
 odhMatch.TextXAlignment = Enum.TextXAlignment.Left
 odhMatch.Parent = odhFrame
 
+local function makeRoleButton(text, xPos, xSize, baseColor, hoverColor, clickHandler)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, xSize, 0, 26)
+	btn.Position = UDim2.new(0, xPos, 0, 138)
+	btn.BackgroundColor3 = baseColor
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
+	btn.Font = Enum.Font.SourceSansBold
+	btn.Text = text
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.TextSize = 13
+	btn.Parent = odhFrame
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 6)
+	c.Parent = btn
+
+	btn.MouseEnter:Connect(function()
+		odhTS:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = hoverColor}):Play()
+	end)
+	btn.MouseLeave:Connect(function()
+		odhTS:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = baseColor}):Play()
+	end)
+	btn.MouseButton1Click:Connect(clickHandler)
+	return btn
+end
+
 local odhStatus = Instance.new("TextLabel")
 odhStatus.Size = UDim2.new(1, -28, 0, 42)
-odhStatus.Position = UDim2.new(0, 14, 0, 142)
+odhStatus.Position = UDim2.new(0, 14, 0, 172)
 odhStatus.BackgroundTransparency = 1
 odhStatus.Font = Enum.Font.SourceSansBold
 odhStatus.Text = "Status: idle"
@@ -356,6 +542,11 @@ odhStatus.TextXAlignment = Enum.TextXAlignment.Left
 odhStatus.TextYAlignment = Enum.TextYAlignment.Top
 odhStatus.TextWrapped = true
 odhStatus.Parent = odhFrame
+
+local function odhSetStatus(text, color)
+	odhStatus.Text = "Status: " .. text
+	odhStatus.TextColor3 = color or Color3.fromRGB(160, 160, 160)
+end
 
 odhBox:GetPropertyChangedSignal("Text"):Connect(function()
 	local raw = odhBox.Text
@@ -374,11 +565,6 @@ odhBox:GetPropertyChangedSignal("Text"):Connect(function()
 	end
 end)
 
-local function odhSetStatus(text, color)
-	odhStatus.Text = "Status: " .. text
-	odhStatus.TextColor3 = color or Color3.fromRGB(160, 160, 160)
-end
-
 odhUIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.KeyCode == Enum.KeyCode.F4 then
@@ -387,6 +573,61 @@ odhUIS.InputBegan:Connect(function(input, gp)
 end)
 
 local odhBusy = false
+
+local function odhFlingRole(roleName)
+	if odhBusy then
+		odhSetStatus("already flinging, please wait", Color3.fromRGB(210, 160, 60))
+		return
+	end
+
+	local target
+	if roleName == "Murderer" then
+		target = findMurderer()
+	else
+		target = findSheriff()
+	end
+
+	if not target then
+		odhSetStatus("could not find the " .. roleName:lower(), Color3.fromRGB(200, 60, 60))
+		return
+	end
+
+	if target == player then
+		odhSetStatus("you are the " .. roleName:lower() .. " — cannot fling yourself", Color3.fromRGB(200, 60, 60))
+		return
+	end
+
+	if not target.Character then
+		odhSetStatus(target.Name .. " has no character", Color3.fromRGB(200, 60, 60))
+		return
+	end
+
+	local duration = tonumber(odhDur.Text) or 5
+	if duration <= 0 then duration = 5 end
+
+	odhBusy = true
+	odhSetStatus("flinging " .. roleName:lower() .. " " .. target.Name .. " for " .. duration .. "s", Color3.fromRGB(140, 160, 255))
+
+	task.spawn(function()
+		flingActive = true
+		local ok, err = pcall(OdhSkid, target, duration)
+		flingActive = false
+		odhBusy = false
+		if ok then
+			odhSetStatus("done — flung " .. roleName:lower() .. " " .. target.Name, Color3.fromRGB(75, 170, 0))
+		else
+			odhSetStatus("error: " .. tostring(err), Color3.fromRGB(200, 60, 60))
+		end
+	end)
+end
+
+makeRoleButton("Fling Murderer", 14, 150,
+	Color3.fromRGB(110, 40, 40), Color3.fromRGB(160, 55, 55),
+	function() odhFlingRole("Murderer") end)
+
+makeRoleButton("Fling Sheriff", 176, 150,
+	Color3.fromRGB(40, 70, 110), Color3.fromRGB(55, 100, 160),
+	function() odhFlingRole("Sheriff") end)
 
 odhBox.FocusLost:Connect(function(enterPressed)
 	if not enterPressed then return end
