@@ -2754,12 +2754,14 @@ if settings["UI"] == true then
 		createInput(Tab02,"HopGracePeriod","Grace Period (s)",true,{1,120},5)
 		createInput(Tab02,"HopLowCountDuration","Low Count Duration (s)",true,{1,120},6)
 		createToggle(Tab02,"HopMidRound","Allow Hop Mid-Round",7)
-		createToggle(Tab02, "ExploiterHopEnabled","Hop on Exploiters",9)
-		createInput(Tab02, "MinExploitersToHop","Min Exploiters to Hop",true,{1,12},10)
-		createInput(Tab02, "ExploiterViolationThreshold","Violations to Flag",true,{2,50},11)
-		createInput(Tab02, "ExploiterFlagCooldown","Flag Cooldown (s)",true,{5,120},12)
-		createInput(Tab02, "ExploiterMinMoveDistance","Min Move Distance (studs)",true,{0.5,10},13)
-		createInput(Tab02, "ExploiterSampleRate","Sample Rate (s)",true,{0.02,1},14)
+		
+		createToggle(Tab02, "ExploiterHopEnabled","Hop on Exploiters",8)
+		createInput(Tab02, "MinExploitersToHop","Min Exploiters to Hop",true,{1,12},9)
+		createInput(Tab02, "ExploiterViolationThreshold","Violations to Flag",true,{2,50},10)
+		createInput(Tab02, "ExploiterFlagCooldown","Flag Cooldown (s)",true,{5,120},11)
+		createInput(Tab02, "ExploiterMinMoveDistance","Min Move Distance (studs)",true,{0.5,10},12)
+		createInput(Tab02, "ExploiterSampleRate","Sample Rate (s)",true,{0.02,1},13)
+		
 		createButton(Tab02,"⚡ HOP NOW",COLORS.accent,function()
 			if not _G._tokyoServerHop then
 				setStatus("[AutoHop] Server-hop module not loaded yet")
@@ -2769,14 +2771,15 @@ if settings["UI"] == true then
 			settings["ServerHopEnabled"] = true
 			_G._tokyoServerHop("Manual user request")
 			settings["ServerHopEnabled"] = saved
-		end, 8)
+		end, 14)
+		
 		createButton(Tab02, "♻ Reset Hop Counter", COLORS.elevated, function()
 			if _G._tokyoResetHopCounter then
 				_G._tokyoResetHopCounter()
 			else
 				setStatus("[AutoHop] Hop module not ready")
 			end
-		end, 9)
+		end, 15)
 
 		local _, usernameBox = createInput(Tab03, "FlingUsername", "Target Username", false, nil, 1)
 
