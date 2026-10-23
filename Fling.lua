@@ -269,7 +269,7 @@ task.spawn(function()
 	end
 
 	if not pdc then
-		warn("[ODH] MM2 PlayerDataChanged not found — role detection will rely on Knife/Gun only.")
+		warn("[TokyoMemoriess] MM2 PlayerDataChanged not found — role detection will rely on Knife/Gun only.")
 		return
 	end
 
@@ -363,7 +363,7 @@ local function odhResolvePlayer(input)
 end
 
 local odhGui = Instance.new("ScreenGui")
-odhGui.Name = "OdhSkidUI"
+odhGui.Name = "TokyoMemoriessUI"
 odhGui.ResetOnSpawn = false
 odhGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 odhGui.IgnoreGuiInset = true
@@ -393,7 +393,7 @@ odhTitle.Size = UDim2.new(1, -44, 0, 26)
 odhTitle.Position = UDim2.new(0, 14, 0, 6)
 odhTitle.BackgroundTransparency = 1
 odhTitle.Font = Enum.Font.SourceSansBold
-odhTitle.Text = "ODH SKID"
+odhTitle.Text = "TokyoMemoriess's Fling"
 odhTitle.TextSize = 15
 odhTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 odhTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -415,14 +415,45 @@ local odhCloseCorner = Instance.new("UICorner")
 odhCloseCorner.CornerRadius = UDim.new(0, 6)
 odhCloseCorner.Parent = odhClose
 
+local odhToggleButton = Instance.new("TextButton")
+odhToggleButton.Name = "ToggleButton"
+odhToggleButton.Size = UDim2.new(0, 45, 0, 45)
+odhToggleButton.Position = UDim2.new(0, 20, 0, 20)
+odhToggleButton.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+odhToggleButton.BorderSizePixel = 0
+odhToggleButton.Text = "T"
+odhToggleButton.TextColor3 = Color3.fromRGB(125, 85, 255)
+odhToggleButton.Font = Enum.Font.SourceSansBold
+odhToggleButton.TextSize = 28
+odhToggleButton.AutoButtonColor = false
+odhToggleButton.Visible = false
+odhToggleButton.Draggable = true
+odhToggleButton.Parent = odhGui
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(1, 0)
+toggleCorner.Parent = odhToggleButton
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = Color3.fromRGB(125, 85, 255)
+toggleStroke.Thickness = 2.5
+toggleStroke.Parent = odhToggleButton
+
 odhClose.MouseEnter:Connect(function()
 	odhTS:Create(odhClose, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(120, 40, 40)}):Play()
 end)
 odhClose.MouseLeave:Connect(function()
 	odhTS:Create(odhClose, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(60, 32, 32)}):Play()
 end)
+
 odhClose.MouseButton1Click:Connect(function()
 	odhFrame.Visible = false
+	odhToggleButton.Visible = true
+end)
+
+odhToggleButton.MouseButton1Click:Connect(function()
+	odhFrame.Visible = true
+	odhToggleButton.Visible = false
 end)
 
 local odhBox = Instance.new("TextBox")
@@ -569,6 +600,9 @@ odhUIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.KeyCode == Enum.KeyCode.F4 then
 		odhFrame.Visible = not odhFrame.Visible
+		if odhFrame.Visible then
+			odhToggleButton.Visible = false
+		end
 	end
 end)
 
