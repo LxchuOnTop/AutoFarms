@@ -3150,6 +3150,14 @@ local function serverHop(reason)
         setStatus("[AutoHop] Teleport error: " .. tostring(err))
         if wasFarming ~= nil then farming = wasFarming end
         hopping = false
+    else
+        task.delay(5, function()
+            if hopping then
+                setStatus("[AutoHop] Teleport timed out. Restoring autofarm.")
+                if wasFarming ~= nil then farming = wasFarming end
+                hopping = false
+            end
+        end)
     end
 end
 
@@ -3175,7 +3183,9 @@ task.spawn(function()
 end)
 
 local function hasActiveAnimation(hum)
-    for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+    local ok, tracks = pcall(function() return hum:GetPlayingAnimationTracks() end)
+    if not ok or not tracks then return false end
+    for _, track in ipairs(tracks) do
         if track.IsPlaying and track.WeightCurrent > 0.1 and track.Speed ~= 0 then
             return true
         end
@@ -3221,8 +3231,6 @@ local function trackPlayerForExploit(p)
                 local state = hum:GetState()
                 local vel = hrp.AssemblyLinearVelocity.Magnitude
                 
-                local isGroundState = (state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics or state == Enum.HumanoidStateType.Landed)
-                local isPhysicsState = (state == Enum.HumanoidStateType.Physics)
                 local isSafeState = (state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Seated or state == Enum.HumanoidStateType.Climbing or state == Enum.HumanoidStateType.Swimming or state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.GettingUp)
                 
                 if tr.lastPos and tr.lastTime and tr.samplesSeen >= 2 then
@@ -3232,12 +3240,11 @@ local function trackPlayerForExploit(p)
                         local dist = delta.Magnitude
                         
                         if dist > minDist and not isSafeState then
-                            -- Teleport Filter: Ignore huge instant jumps
                             if dist > 100 then
                                 tr.violations = 0
                                 tr.directionHistory = {}
                             else
-                                if isPhysicsState and vel > 15 then
+                                if state == Enum.HumanoidStateType.Physics and vel > 15 then
                                     tr.violations = 0
                                 else
                                     local pts = 0
@@ -3332,12 +3339,6 @@ task.spawn(function()
         end
     end
 end)
-
-if queue_on_teleport and getgenv().TokyoFarmSourceURL then
-    pcall(function()
-        queue_on_teleport("loadstring(game:HttpGet('" .. getgenv().TokyoFarmSourceURL .. "'))()")
-    end)
-end
 
 task.spawn(function()
     local message = workspace:WaitForChild("Message")
