@@ -22,12 +22,21 @@ local settings = {
 	["HopGracePeriod"] = 12,
 	["HopLowCountDuration"] = 15,
 	["HopMidRound"] = false,
+	["ExploiterHopEnabled"] = false,
+	["MinExploitersToHop"] = 1,
+	["ExploiterViolationThreshold"] = 6,
+	["ExploiterFlagCooldown"] = 30,
+	["ExploiterMinMoveDistance"] = 1.5,
+	["ExploiterSampleRate"] = 0.1,
 	["HopStateFile"] = "TokyoFarm_HopState.json",
 }
 
 local players = game:GetService("Players")
 
 local tracked = {}
+local flingPlayerData = {}
+local exploiterTrackers = {}
+local flaggedExploiters = {}
 
 local function enforce(part)
     if part.CanCollide then
@@ -592,175 +601,195 @@ local function enterTunnelIfNeeded(targetY)
 end
 
 local function teleportFunction(cframe, duration, ifCoin)
-	if ifCoin then
-		if coinBlacklist[ifCoin] then return nil end
-		if coinArrivalTime[ifCoin] and (os.clock() - coinArrivalTime[ifCoin]) > 10 then
-			coinBlacklist[ifCoin] = true
-			coinArrivalTime[ifCoin] = nil
-			setStatus("STATUS: Coin Bugged! Blacklisting and selecting another...")
-			return nil
-		end
-	end
+    if ifCoin then
+        if coinBlacklist[ifCoin] then return nil end
+        if coinArrivalTime[ifCoin] and (os.clock() - coinArrivalTime[ifCoin]) > 10 then
+            coinBlacklist[ifCoin] = true
+            coinArrivalTime[ifCoin] = nil
+            setStatus("STATUS: Coin Bugged! Blacklisting and selecting another...")
+            return nil
+        end
+    end
 
-	local cancelled = false
-	local currentTween = nil
-	local coinCFrame = ifCoin and ifCoin.Parent and ifCoin.CFrame or nil
+    local cancelled = false
+    local currentTween = nil
+    local coinCFrame = ifCoin and ifCoin.Parent and ifCoin.CFrame or nil
 
-	local function tweenTo(targetCFrame, dur)
-		if cancelled then return false end
-		if dur <= 0 then
-			humanoidRootPart.CFrame = targetCFrame
-			return not cancelled
-		end
-		dur = math.max(dur, 0.01)
-		currentTween = tweenService:Create(
-			humanoidRootPart,
-			TweenInfo.new(dur, Enum.EasingStyle.Linear),
-			{CFrame = targetCFrame}
-		)
-		currentTween:Play()
-		currentTween.Completed:Wait()
-		return not cancelled
-	end
+    local function tweenTo(targetCFrame, dur)
+        if cancelled then return false end
+        if dur <= 0 then
+            humanoidRootPart.CFrame = targetCFrame
+            return not cancelled
+        end
+        dur = math.max(dur, 0.01)
+        currentTween = tweenService:Create(
+            humanoidRootPart,
+            TweenInfo.new(dur, Enum.EasingStyle.Linear),
+            {CFrame = targetCFrame}
+        )
+        currentTween:Play()
+        currentTween.Completed:Wait()
+        return not cancelled
+    end
 
-	if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild('TouchInterest') and (humanoidRootPart.Position - ifCoin.Position).Magnitude < settings["CoinAuraDistance"] then
-		setStatus("STATUS: [COIN AURA]: Teleporting Coin to Player...")
-		ifCoin.CFrame = humanoidRootPart.CFrame
-		if coinArrivalTime[ifCoin] == nil then
-			coinArrivalTime[ifCoin] = os.clock()
-		end
-		
-		safeHold.targetCFrame = humanoidRootPart.CFrame 
-		safeHold.tweening = false
-		
-		return nil
-	end
+    if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild('TouchInterest') and (humanoidRootPart.Position - ifCoin.Position).Magnitude < settings["CoinAuraDistance"] then
+        setStatus("STATUS: [COIN AURA]: Teleporting Coin to Player...")
+        ifCoin.CFrame = humanoidRootPart.CFrame
+        if coinArrivalTime[ifCoin] == nil then
+            coinArrivalTime[ifCoin] = os.clock()
+        end
+        
+        safeHold.targetCFrame = humanoidRootPart.CFrame 
+        safeHold.tweening = false
+        
+        return nil
+    end
 
-	if settings["Mode"] == "Standing" then
-		safeHold.active = false
-		safeHold.tweening = false
-		safeHold.targetCFrame = nil
-		disablePhysics(true)
-		setStatus("STATUS: Going for another coin.")
-		local handle = {}
+    if settings["Mode"] == "Standing" then
+        safeHold.active = false
+        safeHold.tweening = false
+        safeHold.targetCFrame = nil
+        
+        disablePhysics(false) 
+        
+        local animateScript = character:FindFirstChild("Animate")
+        if animateScript then animateScript.Enabled = true end
+        local animator = humanoid:FindFirstChildOfClass("Animator")
+        if not animator then
+            animator = Instance.new("Animator")
+            animator.Parent = humanoid
+        end
+        
+        local fallAnim = Instance.new("Animation")
+        fallAnim.AnimationId = "rbxassetid://507767714"
+        local fallTrack = animator:LoadAnimation(fallAnim)
+        fallTrack:Play()
 
-		local adjustedCFrame = cframe
-		if ifCoin then
-			local rot = cframe - cframe.Position
-			local safeY = computeSafeTargetY(ifCoin, cframe.Position.Y)
-			adjustedCFrame = CFrame.new(cframe.Position.X, safeY, cframe.Position.Z) * rot
-		end
+        setStatus("STATUS: Going for another coin.")
+        local handle = {}
+        local adjustedCFrame = cframe
+        if ifCoin then
+            local rot = cframe - cframe.Position
+            local safeY = computeSafeTargetY(ifCoin, cframe.Position.Y)
+            adjustedCFrame = CFrame.new(cframe.Position.X, safeY, cframe.Position.Z) * rot
+        end
 
-		task.spawn(function()
-			if not tweenTo(adjustedCFrame, duration) then return end
-			if ifCoin then
-				coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
-			end
-			task.wait(0.1)
-			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
-				ifCoin.CFrame = humanoidRootPart.CFrame
-			end
-			task.wait(settings["TweenDelay"])
-			if not cancelled then
-				local animator = humanoid:FindFirstChildOfClass("Animator")
-				if not animator then
-					local newAnim = Instance.new("Animator")
-					newAnim.Parent = humanoid
-				end
-				restorePhysics()
-			end
-		end)
+        task.spawn(function()
+            if not tweenTo(adjustedCFrame, duration) then 
+                if fallTrack then fallTrack:Stop() end
+                return 
+            end
+            if ifCoin then
+                coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
+            end
+            task.wait(0.1)
+            if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
+                ifCoin.CFrame = humanoidRootPart.CFrame
+            end
+            task.wait(settings["TweenDelay"])
+            if not cancelled then
+                if fallTrack then fallTrack:Stop() end
+                local idleAnim = Instance.new("Animation")
+                idleAnim.AnimationId = "rbxassetid://507766666"
+                local idleTrack = animator:LoadAnimation(idleAnim)
+                idleTrack:Play()
+                task.wait(1)
+                if idleTrack then idleTrack:Stop() end
+                restorePhysics()
+            end
+        end)
 
-		function handle:Cancel()
-			cancelled = true
-			if currentTween then currentTween:Cancel() end
-			if coinCFrame then
-				humanoidRootPart.CFrame = coinCFrame + Vector3.new(0, 3, 0)
-			end
-			restorePhysics()
-		end
-		return handle
-		elseif settings["Mode"] == "Safe" then
-		disablePhysics(true)
-		setStatus("STATUS: Going for another coin.")
+        function handle:Cancel()
+            cancelled = true
+            if currentTween then currentTween:Cancel() end
+            if fallTrack then fallTrack:Stop() end
+            if coinCFrame then
+                humanoidRootPart.CFrame = coinCFrame + Vector3.new(0, 3, 0)
+            end
+            restorePhysics()
+        end
+        return handle
+    elseif settings["Mode"] == "Safe" then
+        disablePhysics(true)
+        setStatus("STATUS: Going for another coin.")
 
-		if not physicsSettled then
-			local tunnelY = (ifCoin and ifCoin.Position.Y or cframe.Position.Y) - settings["SafeModeOffset"]
-			enterTunnelIfNeeded(tunnelY)
-			if not (humanoidRootPart and humanoidRootPart.Parent) then return nil end
-		end
+        if not physicsSettled then
+            local tunnelY = (ifCoin and ifCoin.Position.Y or cframe.Position.Y) - settings["SafeModeOffset"]
+            enterTunnelIfNeeded(tunnelY)
+            if not (humanoidRootPart and humanoidRootPart.Parent) then return nil end
+        end
 
-		local desiredY = cframe.Position.Y - settings["SafeModeOffset"]
-		local safeY = computeSafeTargetY(ifCoin, desiredY, true)
-		local targetPos = Vector3.new(
-			cframe.Position.X,
-			safeY,
-			cframe.Position.Z
-		)
-		
-		local targetCFrame = CFrame.new(targetPos) * fixedRotation
+        local desiredY = cframe.Position.Y - settings["SafeModeOffset"]
+        local safeY = computeSafeTargetY(ifCoin, desiredY, true)
+        local targetPos = Vector3.new(
+            cframe.Position.X,
+            safeY,
+            cframe.Position.Z
+        )
+        
+        local targetCFrame = CFrame.new(targetPos) * fixedRotation
 
-		humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * fixedRotation
+        humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position) * fixedRotation
 
-		local gyro = Instance.new("BodyGyro")
-		gyro.Parent = humanoidRootPart
-		gyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-		gyro.D = 0
-		gyro.P = 10000
-		gyro.CFrame = targetCFrame
+        local gyro = Instance.new("BodyGyro")
+        gyro.Parent = humanoidRootPart
+        gyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        gyro.D = 0
+        gyro.P = 10000
+        gyro.CFrame = targetCFrame
 
-		safeHold.active = true
-		safeHold.targetCFrame = targetCFrame
+        safeHold.active = true
+        safeHold.targetCFrame = targetCFrame
 
-		local handle = {}
-		local tween
+        local handle = {}
+        local tween
 
-		local dist = (humanoidRootPart.Position - targetPos).Magnitude
-		if dist > 0.05 then
-			local safeDur = math.max(duration, 0.01)
-			safeHold.tweening = true
-			
-			tween = tweenService:Create(
-				humanoidRootPart,
-				TweenInfo.new(safeDur, Enum.EasingStyle.Linear),
-				{Position = targetPos} 
-			)
-			tween.Completed:Connect(function()
-				if not cancelled then
-					safeHold.tweening = false
-				end
-			end)
-			tween:Play()
-		else
-			safeHold.tweening = false
-			humanoidRootPart.CFrame = targetCFrame
-		end
+        local dist = (humanoidRootPart.Position - targetPos).Magnitude
+        if dist > 0.05 then
+            local safeDur = math.max(duration, 0.01)
+            safeHold.tweening = true
+            
+            tween = tweenService:Create(
+                humanoidRootPart,
+                TweenInfo.new(safeDur, Enum.EasingStyle.Linear),
+                {Position = targetPos} 
+            )
+            tween.Completed:Connect(function()
+                if not cancelled then
+                    safeHold.tweening = false
+                end
+            end)
+            tween:Play()
+        else
+            safeHold.tweening = false
+            humanoidRootPart.CFrame = targetCFrame
+        end
 
-		task.spawn(function()
-			if tween then tween.Completed:Wait() end
-			if gyro then gyro:Destroy() end
-			if cancelled then return end
-			if ifCoin then
-				coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
-			end
-			if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
-				ifCoin.CFrame = humanoidRootPart.CFrame
-			end
-		end)
+        task.spawn(function()
+            if tween then tween.Completed:Wait() end
+            if gyro then gyro:Destroy() end
+            if cancelled then return end
+            if ifCoin then
+                coinArrivalTime[ifCoin] = coinArrivalTime[ifCoin] or os.clock()
+            end
+            if ifCoin and ifCoin.Parent and ifCoin:FindFirstChild("TouchInterest") then
+                ifCoin.CFrame = humanoidRootPart.CFrame
+            end
+        end)
 
-		function handle:Cancel()
-			cancelled = true
-			if tween then tween:Cancel() end
-			if gyro then gyro:Destroy() end
-			pcall(function()
-				if humanoidRootPart and humanoidRootPart.Parent then
-					safeHold.targetCFrame = humanoidRootPart.CFrame
-				end
-			end)
-			safeHold.tweening = false
-		end
-		return handle
-	end
+        function handle:Cancel()
+            cancelled = true
+            if tween then tween:Cancel() end
+            if gyro then gyro:Destroy() end
+            pcall(function()
+                if humanoidRootPart and humanoidRootPart.Parent then
+                    safeHold.targetCFrame = humanoidRootPart.CFrame
+                end
+            end)
+            safeHold.tweening = false
+        end
+        return handle
+    end
 end
 
 local function hasKnife()
@@ -1016,99 +1045,141 @@ local function getNearestCoin()
 end
 
 local function startFarmingLoop()
-	task.spawn(function()
-		while true do
-			local ok, err = pcall(function()
-				local processed = false
-				if farming and not fullBag and roundStarted and alive
-					and character and humanoidRootPart and humanoidRootPart.Parent
-					and humanoid and humanoid.Parent and humanoid.Health > 0 then
-					local coin, distance = getNearestCoin()
-					if coin and coin.Parent then
-						processed = true
-						if not coinAttemptStart[coin] then
-							coinAttemptStart[coin] = os.clock()
-						end
+    task.spawn(function()
+        while true do
+            local ok, err = pcall(function()
+                local processed = false
+                if farming and not fullBag and roundStarted and alive
+                    and character and humanoidRootPart and humanoidRootPart.Parent
+                    and humanoid and humanoid.Parent and humanoid.Health > 0 then
+                    local coin, distance = getNearestCoin()
+                    if coin and coin.Parent then
+                        processed = true
+                        if not coinAttemptStart[coin] then
+                            coinAttemptStart[coin] = os.clock()
+                        end
 
-						if (os.clock() - coinAttemptStart[coin]) > 10 then
-							coinBlacklist[coin] = true
-							coinAttemptStart[coin] = nil
-							setStatus("STATUS: Coin stuck for 10s! Blacklisting and selecting another...")
-						elseif distance > 250 then
-							if coinArrivalTime[coin] and (os.clock() - coinArrivalTime[coin]) > 10 then
-								coinBlacklist[coin] = true
-								coinArrivalTime[coin] = nil
-								setStatus("STATUS: Coin stuck for 10s! Blacklisting...")
-							else
-								disablePhysics(true)
-								local desiredY = coin.Position.Y - settings["SafeModeOffset"]
-								local safeY = computeSafeTargetY(coin, desiredY, true)
-								local targetPos = Vector3.new(coin.Position.X, safeY, coin.Position.Z)
+                        if (os.clock() - coinAttemptStart[coin]) > 10 then
+                            coinBlacklist[coin] = true
+                            coinAttemptStart[coin] = nil
+                            setStatus("STATUS: Coin stuck for 10s! Blacklisting and selecting another...")
+                        elseif distance > 250 then
+                            if coinArrivalTime[coin] and (os.clock() - coinArrivalTime[coin]) > 10 then
+                                coinBlacklist[coin] = true
+                                coinArrivalTime[coin] = nil
+                                setStatus("STATUS: Coin stuck for 10s! Blacklisting...")
+                            else
+                                disablePhysics(true)
+                                local desiredY = coin.Position.Y - settings["SafeModeOffset"]
+                                local safeY = computeSafeTargetY(coin, desiredY, true)
+                                local targetPos = Vector3.new(coin.Position.X, safeY, coin.Position.Z)
 
-								safeHold.active = true
-								safeHold.tweening = false
-								safeHold.targetCFrame = CFrame.new(targetPos) * fixedRotation
-								humanoidRootPart.CFrame = safeHold.targetCFrame
+                                safeHold.active = true
+                                safeHold.tweening = false
+                                safeHold.targetCFrame = CFrame.new(targetPos) * fixedRotation
+                                humanoidRootPart.CFrame = safeHold.targetCFrame
 
-								coinArrivalTime[coin] = coinArrivalTime[coin] or os.clock()
+                                coinArrivalTime[coin] = coinArrivalTime[coin] or os.clock()
 
-								local targetCoin = coin
-								task.spawn(function()
-									task.wait(0.1)
-									if targetCoin and targetCoin.Parent and targetCoin:FindFirstChild("TouchInterest")
-										and humanoidRootPart and humanoidRootPart.Parent then
-										targetCoin.CFrame = humanoidRootPart.CFrame
-									end
-								end)
-							end
-						else
-							local handle = teleportFunction(coin.CFrame, distance / settings["AutofarmSpeed"], coin)
-							currentFarmHandle = handle
+                                local targetCoin = coin
+                                task.spawn(function()
+                                    task.wait(0.1)
+                                    if targetCoin and targetCoin.Parent and targetCoin:FindFirstChild("TouchInterest")
+                                        and humanoidRootPart and humanoidRootPart.Parent then
+                                        targetCoin.CFrame = humanoidRootPart.CFrame
+                                    end
+                                end)
+                            end
+                        else
+                            local handle = teleportFunction(coin.CFrame, distance / settings["AutofarmSpeed"], coin)
+                            currentFarmHandle = handle
 
-							if handle then
-								local t0 = os.clock()
-								local maxWait = (distance / settings["AutofarmSpeed"]) + 4
-								while farming
-									and coin.Parent
-									and coin:FindFirstChild("TouchInterest")
-									and (os.clock() - t0) < maxWait
-									and not coinBlacklist[coin] do
-									task.wait(0.05)
-								end
+                            if handle then
+                                local t0 = os.clock()
+                                local maxWait = (distance / settings["AutofarmSpeed"]) + 4
+                                while farming
+                                    and coin.Parent
+                                    and coin:FindFirstChild("TouchInterest")
+                                    and (os.clock() - t0) < maxWait
+                                    and not coinBlacklist[coin] do
+                                    task.wait(0.05)
+                                end
 
-								if handle and handle.Cancel then
-									handle:Cancel()
-								end
-								if currentFarmHandle == handle then
-									currentFarmHandle = nil
-								end
-							else
-								task.wait(0.1)
-							end
+                                if handle and handle.Cancel then
+                                    handle:Cancel()
+                                end
+                                if currentFarmHandle == handle then
+                                    currentFarmHandle = nil
+                                end
+                            else
+                                task.wait(0.1)
+                            end
 
-							if not (coin.Parent and coin:FindFirstChild("TouchInterest")) then
-								coinAttemptStart[coin] = nil
-							end
-						end
-					end
-				end
+                            if not (coin.Parent and coin:FindFirstChild("TouchInterest")) then
+                                coinAttemptStart[coin] = nil
+                            end
+                        end
+                    end
+                end
 
-				if not processed then
-					task.wait(settings["TweenDelay"])
-				else
-					task.wait(settings["TweenDelay"])
-				end
-			end)
-			if not ok then
-				setStatus("[Autofarm] loop iteration error: " .. tostring(err))
-				if floatForce and not floatForce.Parent then
-					floatForce = nil
-				end
-				physicsDisabled = false
-				task.wait(0.25)
-			end
-		end
-	end)
+                if not processed then
+                    task.wait(settings["TweenDelay"])
+                else
+                    task.wait(settings["TweenDelay"])
+                end
+            end)
+            if not ok then
+                setStatus("[Autofarm] loop iteration error: " .. tostring(err))
+                if floatForce and not floatForce.Parent then
+                    floatForce = nil
+                end
+                physicsDisabled = false
+                task.wait(0.25)
+            end
+        end
+    end)
+
+    task.spawn(function()
+        local lastActionTime = os.clock()
+        local lastPos = humanoidRootPart.Position
+        while true do
+            task.wait(2)
+            if farming and not fullBag and roundStarted and alive and humanoid and humanoid.Health > 0 and humanoidRootPart and humanoidRootPart.Parent then
+                local currentPos = humanoidRootPart.Position
+                if (currentPos - lastPos).Magnitude > 5 then
+                    lastActionTime = os.clock()
+                    lastPos = currentPos
+                end
+                
+                if os.clock() - lastActionTime > 15 then
+                    setStatus("STATUS: Autofarm stuck detected! Restarting...")
+                    if currentFarmHandle and currentFarmHandle.Cancel then
+                        pcall(function() currentFarmHandle:Cancel() end)
+                    end
+                    currentFarmHandle = nil
+                    physicsSettled = false
+                    physicsDisabled = false
+                    safeHold.active = false
+                    safeHold.tweening = false
+                    safeHold.targetCFrame = nil
+                    if floatForce then
+                        pcall(function() floatForce:Destroy() end)
+                        floatForce = nil
+                    end
+                    task.wait(0.5)
+                    lastActionTime = os.clock()
+                    if humanoidRootPart and humanoidRootPart.Parent then
+                        lastPos = humanoidRootPart.Position
+                    end
+                end
+            else
+                lastActionTime = os.clock()
+                if humanoidRootPart and humanoidRootPart.Parent then
+                    lastPos = humanoidRootPart.Position
+                end
+            end
+        end
+    end)
 end
 
 startFarmingLoop()
@@ -1256,7 +1327,7 @@ roundStart.OnClientEvent:Connect(function()
     end
     currentFarmHandle = nil
 
-	fixedRotation = nil
+    fixedRotation = nil
 
     safeHold.active = false
     safeHold.tweening = false
@@ -1267,6 +1338,15 @@ roundStart.OnClientEvent:Connect(function()
             other:SetAttribute('AmIAlive', true)
         end
     end
+
+    for _, tr in pairs(exploiterTrackers) do
+        tr.violations = 0
+        tr.lastPos = nil
+        tr.lastTime = nil
+        tr.samplesSeen = 0
+        tr.directionHistory = {}
+    end
+    flaggedExploiters = {}
 end)
 
 roundEndFade.OnClientEvent:Connect(function()
@@ -1288,6 +1368,15 @@ roundEndFade.OnClientEvent:Connect(function()
 
 	physicsDisabled = false
 
+    for _, tr in pairs(exploiterTrackers) do
+        tr.violations = 0
+        tr.lastPos = nil
+        tr.lastTime = nil
+        tr.samplesSeen = 0
+        tr.directionHistory = {}
+    end
+    flaggedExploiters = {}
+
     if roundStarted then
         setStatus("STATUS: Waiting for round to start.")
         roundCoins = 0
@@ -1302,6 +1391,95 @@ roundEndFade.OnClientEvent:Connect(function()
         end
     end
 end)
+
+task.spawn(function()
+    local fr = game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 30)
+    if not fr then return end
+    local fg = fr:WaitForChild("Gameplay", 30)
+    if not fg then return end
+    local pdc = fg:WaitForChild("PlayerDataChanged", 30)
+    if not pdc then return end
+    pdc.OnClientEvent:Connect(function(data)
+        if type(data) == "table" then flingPlayerData = data end
+    end)
+end)
+
+workspace.ChildRemoved:Connect(function(ch)
+    if ch:FindFirstChild("CoinContainer") and ch:FindFirstChild("Spawns") then
+        flingPlayerData = {}
+    end
+end)
+
+local function findMurderer()
+    for name, data in pairs(flingPlayerData) do
+        if type(data) == "table" and data.Role == "Murderer" then
+            local p = players:FindFirstChild(name)
+            if p then return p end
+        end
+    end
+    for _, p in ipairs(players:GetPlayers()) do
+        if p.Backpack and p.Backpack:FindFirstChild("Knife") then return p end
+    end
+    for _, p in ipairs(players:GetPlayers()) do
+        if p.Character and p.Character:FindFirstChild("Knife") then return p end
+    end
+    return nil
+end
+
+local function findSheriff()
+    for name, data in pairs(flingPlayerData) do
+        if type(data) == "table" and data.Role == "Sheriff" then
+            local p = players:FindFirstChild(name)
+            if p then return p end
+        end
+    end
+    for _, p in ipairs(players:GetPlayers()) do
+        if p.Backpack and p.Backpack:FindFirstChild("Gun") then return p end
+    end
+    for _, p in ipairs(players:GetPlayers()) do
+        if p.Character and p.Character:FindFirstChild("Gun") then return p end
+    end
+    return nil
+end
+
+local function resolvePlayer(input)
+    if not input or input == "" then return nil end
+    local s = input:match("^%s*(.-)%s*$")
+    if s == "" then return nil end
+    local low = s:lower()
+    local list = players:GetPlayers()
+    for _, p in ipairs(list) do if p.Name:lower() == low then return p end end
+    for _, p in ipairs(list) do if p.DisplayName:lower() == low then return p end end
+    for _, p in ipairs(list) do if p.Name:lower():sub(1, #low) == low then return p end end
+    for _, p in ipairs(list) do if p.DisplayName:lower():sub(1, #low) == low then return p end end
+    for _, p in ipairs(list) do if p.Name:lower():find(low, 1, true) then return p end end
+    for _, p in ipairs(list) do if p.DisplayName:lower():find(low, 1, true) then return p end end
+    return nil
+end
+
+local flingBusy = false
+local function flingTarget(targetPlayer, duration)
+    if flingBusy then setStatus("[Fling] Busy"); return false end
+    if not targetPlayer then return false end
+    if targetPlayer == player then return false end
+    if not targetPlayer.Character then return false end
+    duration = tonumber(duration) or 3
+    if duration <= 0 then duration = 3 end
+    flingBusy = true
+    setStatus("[Fling] Flinging " .. targetPlayer.Name .. " for " .. duration .. "s")
+    task.spawn(function()
+        flingActive = true
+        local ok, err = pcall(OdhSkid, targetPlayer, duration)
+        flingActive = false
+        flingBusy = false
+        if ok then
+            setStatus("[Fling] Done - flung " .. targetPlayer.Name)
+        else
+            setStatus("[Fling] Error: " .. tostring(err))
+        end
+    end)
+    return true
+end
 
 if settings["UI"] == true then
 	if settings["UIMode"] == 1 then
@@ -2290,6 +2468,20 @@ if settings["UI"] == true then
 		Tab2Btn.Parent = TabBar
 		corner(Tab2Btn, 6)
 
+		local Tab3Btn = Instance.new("TextButton")
+		Tab3Btn.Name = "Tab3Btn"
+		Tab3Btn.Size = UDim2.new(0, 80, 0, 26)
+		Tab3Btn.Position = UDim2.new(0, 234, 0, 4)
+		Tab3Btn.BackgroundColor3 = COLORS.elevated
+		Tab3Btn.BorderSizePixel = 0
+		Tab3Btn.Font = FONT_BOLD
+		Tab3Btn.Text = "FLING"
+		Tab3Btn.TextColor3 = COLORS.textDim
+		Tab3Btn.TextSize = 11
+		Tab3Btn.AutoButtonColor = false
+		Tab3Btn.Parent = TabBar
+		corner(Tab3Btn, 6)
+
 		local Content = Instance.new("Frame")
 		Content.Name = "Content"
 		Content.Size = UDim2.new(1, 0, 1, -(H_TITLE + H_TABBAR + H_STATUS))
@@ -2333,20 +2525,30 @@ if settings["UI"] == true then
 
 		local Tab01 = makeTab("Tab01")
 		local Tab02 = makeTab("Tab02")
+		local Tab03 = makeTab("Tab03")
 		Tab02.Visible = false
+		Tab03.Visible = false
 
 		Tab1Btn.MouseButton1Click:Connect(function()
-			Tab01.Visible = true; Tab02.Visible = false
+			Tab01.Visible = true; Tab02.Visible = false; Tab03.Visible = false
 			tweenService:Create(Tab1Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accent,  TextColor3 = COLORS.text}):Play()
 			tweenService:Create(Tab2Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
+			tweenService:Create(Tab3Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
 		end)
 		Tab2Btn.MouseButton1Click:Connect(function()
-			Tab01.Visible = false; Tab02.Visible = true
+			Tab01.Visible = false; Tab02.Visible = true; Tab03.Visible = false
 			tweenService:Create(Tab2Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accent,  TextColor3 = COLORS.text}):Play()
 			tweenService:Create(Tab1Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
+			tweenService:Create(Tab3Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
+		end)
+		Tab3Btn.MouseButton1Click:Connect(function()
+			Tab01.Visible = false; Tab02.Visible = false; Tab03.Visible = true
+			tweenService:Create(Tab3Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.accent,  TextColor3 = COLORS.text}):Play()
+			tweenService:Create(Tab1Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
+			tweenService:Create(Tab2Btn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.elevated, TextColor3 = COLORS.textDim}):Play()
 		end)
 
-				local function createInput(parent, key, labelText, isNumeric, clampRange, order)
+		local function createInput(parent, key, labelText, isNumeric, clampRange, order)
 			local row = Instance.new("Frame")
 			row.Size = UDim2.new(1, 0, 0, H_ROW)
 			row.BackgroundColor3 = COLORS.elevated
@@ -2403,7 +2605,7 @@ if settings["UI"] == true then
 					end
 				end
 			end)
-			return row
+			return row, inp
 		end
 
 		local function createToggle(parent, key, labelText, order)
@@ -2543,25 +2745,33 @@ if settings["UI"] == true then
 			return btn
 		end
 
-		createInput(Tab01,   "AutofarmSpeed",         "Autofarm Speed",         true,  {1, 500}, 1)
-		createInput(Tab01,   "TweenDelay",            "Tween Delay",            true,  {0.01, 5}, 2)
-		createInput(Tab01,   "CoinAuraDistance",      "Coin Aura Distance",     true,  {0, 50},  3)
-		createInput(Tab01,   "CoinType",              "Coin Type",              false, nil,      4)
-		createInput(Tab01,   "SafeModeOffset",        "Safe Mode Offset",       true,  {0, 30},  5)
-		createSegment(Tab01, "Mode",                  "Mode",                   {"Safe", "Standing"}, 6)
-		createToggle(Tab01,  "KillEveryoneIfDone",    "Kill All When Done",     7)
-		createToggle(Tab01,  "ShootMurdererIfDone",   "Fling Murderer",         8)
-		createToggle(Tab01,  "ResetIfDone",           "Reset When Done",        9)
-		createToggle(Tab01,  "FullyOptimizeWhileGrinding", "Fully Optimize",    10)
+		createInput(Tab01,"AutofarmSpeed","Autofarm Speed",true,{1,500},1)
+		createInput(Tab01,"TweenDelay","Tween Delay",true,{0.01,5},2)
+		createInput(Tab01,"CoinAuraDistance","Coin Aura Distance",true,{0,50},3)
+		createInput(Tab01,"CoinType","Coin Type",false,nil,4)
+		createInput(Tab01,"SafeModeOffset","Safe Mode Offset",true,{0,30},5)
+		createSegment(Tab01,"Mode","Mode",{"Safe","Standing"},6)
+		createToggle(Tab01,"KillEveryoneIfDone","Kill All When Done",7)
+		createToggle(Tab01,"ShootMurdererIfDone","Fling Murderer",8)
+		createToggle(Tab01,"ResetIfDone","Reset When Done",9)
+		createToggle(Tab01,"FullyOptimizeWhileGrinding","Fully Optimize",10)
 
-		createToggle(Tab02, "ServerHopEnabled",       "Server Hop Enabled",     1)
-		createInput(Tab02,  "MaxHopAttempts",         "Max Hop Attempts",       true, {1, 100}, 2)
-		createInput(Tab02,  "MinPlayerCount",         "Min Player Count",       true, {1, 12},  3)
-		createInput(Tab02,  "HopCheckInterval",       "Check Interval (s)",     true, {1, 60},  4)
-		createInput(Tab02,  "HopGracePeriod",         "Grace Period (s)",       true, {1, 120}, 5)
-		createInput(Tab02,  "HopLowCountDuration",    "Low Count Duration (s)", true, {1, 120}, 6)
-		createToggle(Tab02, "HopMidRound",            "Allow Hop Mid-Round",    7)
-		createButton(Tab02, "⚡ HOP NOW", COLORS.accent, function()
+		createToggle(Tab02,"ServerHopEnabled","Server Hop Enabled",1)
+		createInput(Tab02,"MaxHopAttempts","Max Hop Attempts",true,{1,100},2)
+		createInput(Tab02,"MinPlayerCount","Min Player Count",true,{1,12},3)
+		createInput(Tab02,"HopCheckInterval","Check Interval (s)",true,{1,60},4)
+		createInput(Tab02,"HopGracePeriod","Grace Period (s)",true,{1,120},5)
+		createInput(Tab02,"HopLowCountDuration","Low Count Duration (s)",true,{1,120},6)
+		createToggle(Tab02,"HopMidRound","Allow Hop Mid-Round",7)
+		
+		createToggle(Tab02, "ExploiterHopEnabled","Hop on Exploiters",8)
+		createInput(Tab02, "MinExploitersToHop","Min Exploiters to Hop",true,{1,12},9)
+		createInput(Tab02, "ExploiterViolationThreshold","Violations to Flag",true,{2,50},10)
+		createInput(Tab02, "ExploiterFlagCooldown","Flag Cooldown (s)",true,{5,120},11)
+		createInput(Tab02, "ExploiterMinMoveDistance","Min Move Distance (studs)",true,{0.5,10},12)
+		createInput(Tab02, "ExploiterSampleRate","Sample Rate (s)",true,{0.02,1},13)
+		
+		createButton(Tab02,"⚡ HOP NOW",COLORS.accent,function()
 			if not _G._tokyoServerHop then
 				setStatus("[AutoHop] Server-hop module not loaded yet")
 				return
@@ -2570,12 +2780,73 @@ if settings["UI"] == true then
 			settings["ServerHopEnabled"] = true
 			_G._tokyoServerHop("Manual user request")
 			settings["ServerHopEnabled"] = saved
-		end, 8)
+		end, 14)
+		
 		createButton(Tab02, "♻ Reset Hop Counter", COLORS.elevated, function()
-			hopState.attempts = 0
-			saveHopState(hopState)
-			setStatus("[AutoHop] Attempt counter reset")
-		end, 9)
+			if _G._tokyoResetHopCounter then
+				_G._tokyoResetHopCounter()
+			else
+				setStatus("[AutoHop] Hop module not ready")
+			end
+		end, 15)
+
+		local _, usernameBox = createInput(Tab03, "FlingUsername", "Target Username", false, nil, 1)
+
+		local matchLabel = Instance.new("TextLabel")
+		matchLabel.Size = UDim2.new(1, 0, 0, 16)
+		matchLabel.BackgroundTransparency = 1
+		matchLabel.Font = FONT
+		matchLabel.Text = "Matched: -"
+		matchLabel.TextSize = 10
+		matchLabel.TextColor3 = COLORS.textDim
+		matchLabel.TextXAlignment = Enum.TextXAlignment.Left
+		matchLabel.LayoutOrder = 2
+		matchLabel.Parent = Tab03
+
+		usernameBox:GetPropertyChangedSignal("Text"):Connect(function()
+			if usernameBox.Text == "" then
+				matchLabel.Text = "Matched: -"
+				matchLabel.TextColor3 = COLORS.textDim
+				return
+			end
+			local p = resolvePlayer(usernameBox.Text)
+			if p then
+				matchLabel.Text = "Matched: " .. p.Name .. " (" .. p.DisplayName .. ")"
+				matchLabel.TextColor3 = COLORS.green
+			else
+				matchLabel.Text = "Matched: - none -"
+				matchLabel.TextColor3 = COLORS.red
+			end
+		end)
+
+		createInput(Tab03, "FlingDuration", "Fling Duration (s)", true, {1, 30}, 3)
+
+		createButton(Tab03, "FLING USERNAME", COLORS.accent, function()
+			local target = resolvePlayer(settings["FlingUsername"] or "")
+			if not target then
+				setStatus("[Fling] No player matched")
+				return
+			end
+			flingTarget(target, settings["FlingDuration"] or 3)
+		end, 4)
+
+		createButton(Tab03, "FLING MURDERER", Color3.fromRGB(140, 40, 40), function()
+			local target = findMurderer()
+			if not target then
+				setStatus("[Fling] Murderer not found")
+				return
+			end
+			flingTarget(target, settings["FlingDuration"] or 3)
+		end, 5)
+
+		createButton(Tab03, "FLING SHERIFF", Color3.fromRGB(40, 70, 130), function()
+			local target = findSheriff()
+			if not target then
+				setStatus("[Fling] Sheriff not found")
+				return
+			end
+			flingTarget(target, settings["FlingDuration"] or 3)
+		end, 6)
 
 		local dragging, dragStart, startPos = false, nil, nil
 		local function beginDrag(input)
@@ -2672,6 +2943,12 @@ local function saveHopState(state)
 end
 
 local hopState = loadHopState()
+
+_G._tokyoResetHopCounter = function()
+    hopState.attempts = 0
+    saveHopState(hopState)
+    setStatus("[AutoHop] Attempt counter reset")
+end
 
 task.spawn(function()
     task.wait(300)
@@ -2795,6 +3072,154 @@ end
 
 _G._tokyoServerHop = serverHop
 
+local function hasActiveAnimation(hum)
+    for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+        if track.WeightCurrent > 0.4 and track.Speed ~= 0 then
+            return true
+        end
+    end
+    return false
+end
+
+local function isStraightLine(dirs)
+    if #dirs < 5 then return false end
+    local avg = Vector3.zero
+    for _, d in ipairs(dirs) do avg = avg + d end
+    avg = avg / #dirs
+    if avg.Magnitude < 0.01 then return false end
+    avg = avg.Unit
+    for _, d in ipairs(dirs) do
+        if d:Dot(avg) < 0.99 then return false end
+    end
+    return true
+end
+
+local function trackPlayerForExploit(p)
+    if p == player then return end
+    if exploiterTrackers[p] then return end
+    exploiterTrackers[p] = {
+        lastPos = nil,
+        lastTime = nil,
+        violations = 0,
+        lastViolation = 0,
+        directionHistory = {},
+        samplesSeen = 0,
+    }
+    task.spawn(function()
+        while exploiterTrackers[p] and p.Parent do
+            local tr = exploiterTrackers[p]
+            local char = p.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                local now = os.clock()
+                local pos = hrp.Position
+                local minDist = tonumber(settings["ExploiterMinMoveDistance"]) or 1.5
+                
+                if tr.lastPos and tr.lastTime and tr.samplesSeen >= 2 then
+                    local dt = now - tr.lastTime
+                    if dt > 0.02 then
+                        local delta = pos - tr.lastPos
+                        local dist = delta.Magnitude
+                        
+                        if dist > minDist then
+                            -- Teleport Filter: Ignore huge instant jumps (teleport pads, round transitions)
+                            if dist > 100 then
+                                tr.violations = 0
+                                tr.directionHistory = {}
+                            else
+                                local pts = 0
+                                if hrp.AssemblyLinearVelocity.Magnitude < 3 then
+                                    pts = pts + 3
+                                end
+                                if not hasActiveAnimation(hum) then
+                                    pts = pts + 2
+                                end
+                                if dist > 1 then
+                                    table.insert(tr.directionHistory, delta.Unit)
+                                    if #tr.directionHistory > 6 then
+                                        table.remove(tr.directionHistory, 1)
+                                    end
+                                    if isStraightLine(tr.directionHistory) then
+                                        pts = pts + 1
+                                    end
+                                end
+                                if hum:GetState() == Enum.HumanoidStateType.Physics then
+                                    pts = pts + 1
+                                end
+                                
+                                if pts > 0 then
+                                    tr.violations = tr.violations + pts
+                                    tr.lastViolation = now
+                                end
+                            end
+                        else
+                            tr.directionHistory = {}
+                        end
+                        
+                        if now - tr.lastViolation > 4 then
+                            tr.violations = math.max(0, tr.violations - 1)
+                        end
+                        
+                        local need = tonumber(settings["ExploiterViolationThreshold"]) or 6
+                        if tr.violations >= need then
+                            flaggedExploiters[p] = now
+                        end
+                    end
+                end
+                tr.lastPos = pos
+                tr.lastTime = now
+                tr.samplesSeen = tr.samplesSeen + 1
+            else
+                tr.lastPos = nil
+                tr.lastTime = nil
+            end
+            task.wait(tonumber(settings["ExploiterSampleRate"]) or 0.1)
+        end
+        exploiterTrackers[p] = nil
+    end)
+end
+
+for _, p in ipairs(players:GetPlayers()) do trackPlayerForExploit(p) end
+players.PlayerAdded:Connect(trackPlayerForExploit)
+players.PlayerRemoving:Connect(function(p)
+    exploiterTrackers[p] = nil
+    flaggedExploiters[p] = nil
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(3)
+        if not settings["ExploiterHopEnabled"] then
+            flaggedExploiters = {}
+            continue
+        end
+        if not settings["ServerHopEnabled"] then continue end
+        if hopping then continue end
+        local now = os.clock()
+        local cd = tonumber(settings["ExploiterFlagCooldown"]) or 30
+        local count, names = 0, {}
+        for p, t in pairs(flaggedExploiters) do
+            if not p.Parent then
+                flaggedExploiters[p] = nil
+            elseif now - t > cd then
+                flaggedExploiters[p] = nil
+            else
+                count = count + 1
+                names[#names + 1] = p.Name
+            end
+        end
+        if count > 0 then
+            setStatus(("[Detect] Suspicious: %d [%s]"):format(count, table.concat(names, ", ")))
+        end
+        local minCount = tonumber(settings["MinExploitersToHop"]) or 1
+        if count >= minCount and _G._tokyoServerHop then
+            _G._tokyoServerHop(("Detected %d exploiter(s): %s"):format(count, table.concat(names, ", ")))
+            flaggedExploiters = {}
+        end
+    end
+end)
+
 if queue_on_teleport and getgenv().TokyoFarmSourceURL then
     pcall(function()
         queue_on_teleport("loadstring(game:HttpGet('" .. getgenv().TokyoFarmSourceURL .. "'))()")
@@ -2860,25 +3285,6 @@ task.spawn(function()
         end
     end
 end)
-
-if isfile and isfile(SETTINGS_FILE) then
-	pcall(function()
-		local saved = httpService:JSONDecode(readfile(SETTINGS_FILE))
-		for k, v in pairs(saved) do
-			if settings[k] ~= nil then
-				settings[k] = v
-			end
-		end
-	end)
-end
-
-local function saveSettings()
-	if writefile then
-		pcall(function()
-			writefile(SETTINGS_FILE, httpService:JSONEncode(settings))
-		end)
-	end
-end
 
 task.spawn(function()
 	repeat task.wait() until game:IsLoaded()
