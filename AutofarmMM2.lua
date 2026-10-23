@@ -2998,17 +2998,19 @@ local function httpGetJson(url)
 end
 
 local function fetchServers()
-    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100"):format(game.PlaceId)
+    local cacheBuster = tostring(os.time())
+    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100&_=%s"):format(game.PlaceId, cacheBuster)
     local data = httpGetJson(url)
     if not data or type(data.data) ~= "table" then return {} end
     return data.data
 end
 
-local function pickBestServer()
+local function pickBestServer(ignoreMinPlayers)
     local servers = fetchServers()
     local candidates = {}
     local currentJob = tostring(game.JobId):lower()
     local minPlayers = tonumber(settings["MinPlayerCount"]) or 4
+    if ignoreMinPlayers then minPlayers = 0 end
 
     for _, srv in ipairs(servers) do
         if type(srv) == "table" and type(srv.id) == "string" then
@@ -3040,7 +3042,7 @@ local function pickBestServer()
         return (a.id or "") > (b.id or "")
     end)
 
-    return candidates[1]
+    return candidates[1], #servers
 end
 
 local hopping = false
@@ -3063,15 +3065,13 @@ local function serverHop(reason)
 
     local maxAttempts = tonumber(settings["MaxHopAttempts"]) or 10
     if hopState.attempts >= maxAttempts then
-        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s")
-            :format(hopState.attempts, maxAttempts, tostring(reason)))
+        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s"):format(hopState.attempts, maxAttempts, tostring(reason)))
         return
     end
 
     hopping = true
     hopState.attempts = hopState.attempts + 1
-    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s")
-        :format(hopState.attempts, maxAttempts, tostring(reason)))
+    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s"):format(hopState.attempts, maxAttempts, tostring(reason)))
 
     local wasFarming = farming
     if wasFarming ~= nil then farming = false end
@@ -3081,18 +3081,19 @@ local function serverHop(reason)
         saveHopState(hopState)
     end
 
-    local target = nil
-    for _ = 1, 3 do
+    local target, serverCount = pickBestServer()
+    
+    if not target then
+        hopState.visitedJobs = { tostring(game.JobId):lower() }
         target = pickBestServer()
-        if target and tostring(target.id):lower() ~= tostring(game.JobId):lower() then
-            break
-        end
-        target = nil
-        task.wait(1)
     end
 
     if not target then
-        setStatus("[AutoHop] No new server found. Cancelling to avoid rejoin.")
+        target = pickBestServer(true)
+    end
+
+    if not target then
+        setStatus(("[AutoHop] API returned %d servers, but none are valid. Try again later."):format(serverCount or 0))
         if wasFarming ~= nil then farming = wasFarming end
         hopping = false
         return
