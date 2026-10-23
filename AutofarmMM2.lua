@@ -1,6 +1,7 @@
 -- Scripted by TokyoMemoriess
 
 local SETTINGS_FILE = "TokyoFarm_Settings.json"
+getgenv().TokyoFarmSourceURL = 'https://raw.githubusercontent.com/TokyoMemoriess/AutoFarms/refs/heads/main/AutofarmMM2.lua'
 
 local settings = {
 	["Mode"] = "Safe",
@@ -2903,13 +2904,14 @@ local HOP_STATE_FILE     = settings["HopStateFile"] or "TokyoFarm_HopState.json"
 local HOP_STATE_MAX_JOBS = 100
 
 local function loadHopState()
-    local state = { attempts = 0, visitedJobs = {} }
+    local state = { attempts = 0, visitedJobs = {}, lastHoppedFrom = nil }
 
     if isfile and isfile(HOP_STATE_FILE) then
         pcall(function()
             local data = httpService:JSONDecode(readfile(HOP_STATE_FILE))
             if type(data) ~= "table" then return end
             state.attempts = tonumber(data.attempts) or 0
+            state.lastHoppedFrom = type(data.lastHoppedFrom) == "string" and data.lastHoppedFrom or nil
 
             local vj = data.visitedJobs
             if type(vj) == "table" then
@@ -2924,8 +2926,17 @@ local function loadHopState()
         end)
     end
 
-    if game.JobId and game.JobId ~= "" and not table.find(state.visitedJobs, game.JobId) then
-        table.insert(state.visitedJobs, game.JobId)
+    if game.JobId and game.JobId ~= "" then
+        local already = false
+        for _, v in ipairs(state.visitedJobs) do
+            if tostring(v):lower() == tostring(game.JobId):lower() then
+                already = true
+                break
+            end
+        end
+        if not already then
+            table.insert(state.visitedJobs, game.JobId)
+        end
     end
 
     while #state.visitedJobs > HOP_STATE_MAX_JOBS do
@@ -3049,21 +3060,29 @@ end
 local function serverHop(reason)
     if not settings["ServerHopEnabled"] then return end
     if hopping then return end
+
     local maxAttempts = tonumber(settings["MaxHopAttempts"]) or 10
     if hopState.attempts >= maxAttempts then
-        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s"):format(hopState.attempts, maxAttempts, tostring(reason)))
+        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s")
+            :format(hopState.attempts, maxAttempts, tostring(reason)))
         return
     end
 
     hopping = true
     hopState.attempts = hopState.attempts + 1
-    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s"):format(hopState.attempts, maxAttempts, tostring(reason)))
+    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s")
+        :format(hopState.attempts, maxAttempts, tostring(reason)))
 
     local wasFarming = farming
     if wasFarming ~= nil then farming = false end
 
+    if game.JobId and game.JobId ~= "" then
+        rememberJob(game.JobId)
+        saveHopState(hopState)
+    end
+
     local target = nil
-    for attempt = 1, 3 do
+    for _ = 1, 3 do
         target = pickBestServer()
         if target and tostring(target.id):lower() ~= tostring(game.JobId):lower() then
             break
@@ -3072,32 +3091,70 @@ local function serverHop(reason)
         task.wait(1)
     end
 
-    if target and tostring(target.id):lower() == tostring(game.JobId):lower() then
-        target = nil
+    if not target then
+        setStatus("[AutoHop] No new server found. Cancelling to avoid rejoin.")
+        if wasFarming ~= nil then farming = wasFarming end
+        hopping = false
+        return
     end
 
+    local targetJobId = tostring(target.id)
+    if targetJobId:lower() == tostring(game.JobId):lower() then
+        setStatus("[AutoHop] Target equals current server. Aborting.")
+        if wasFarming ~= nil then farming = wasFarming end
+        hopping = false
+        return
+    end
+
+    rememberJob(targetJobId)
+    hopState.lastHoppedFrom = game.JobId
     saveHopState(hopState)
 
-    if target then
-        rememberJob(target.id)
-        saveHopState(hopState)
-        setStatus(("[AutoHop] Teleporting to new server: %s"):format(target.id))
-        local ok, err = pcall(function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, players.LocalPlayer)
+    if queue_on_teleport and getgenv().TokyoFarmSourceURL then
+        pcall(function()
+            queue_on_teleport("loadstring(game:HttpGet('" .. getgenv().TokyoFarmSourceURL .. "'))()")
         end)
-        if not ok then
-            setStatus("[AutoHop] Teleport failed: " .. tostring(err))
-            if wasFarming ~= nil then farming = wasFarming end
-            hopping = false
+    end
+
+    setStatus(("[AutoHop] Teleporting to: %s"):format(targetJobId))
+
+    local ok, err = pcall(function()
+        if TeleportService.TeleportAsync then
+            local opts = Instance.new("TeleportOptions")
+            opts.ServerInstanceId = targetJobId
+            TeleportService:TeleportAsync(game.PlaceId, { players.LocalPlayer }, opts)
+        else
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, targetJobId, players.LocalPlayer)
         end
-    else
-        setStatus("[AutoHop] Could not find a new server. Cancelling hop to avoid rejoining.")
+    end)
+
+    if not ok then
+        setStatus("[AutoHop] Teleport error: " .. tostring(err))
         if wasFarming ~= nil then farming = wasFarming end
         hopping = false
     end
 end
 
 _G._tokyoServerHop = serverHop
+
+task.spawn(function()
+    repeat task.wait(1) until game:IsLoaded()
+    task.wait(2)
+
+    if hopState.lastHoppedFrom and tostring(hopState.lastHoppedFrom):lower() == tostring(game.JobId):lower() then
+        setStatus("[AutoHop] Rejoin detected. Re-hopping with server blacklisted...")
+        rememberJob(game.JobId)
+        hopState.lastHoppedFrom = nil
+        saveHopState(hopState)
+        task.wait(1)
+        if _G._tokyoServerHop then
+            _G._tokyoServerHop("Rejoined the same server")
+        end
+    else
+        hopState.lastHoppedFrom = nil
+        saveHopState(hopState)
+    end
+end)
 
 local function hasActiveAnimation(hum)
     for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
