@@ -2987,8 +2987,7 @@ local function httpGetJson(url)
 end
 
 local function fetchServers()
-    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100")
-        :format(game.PlaceId)
+    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100"):format(game.PlaceId)
     local data = httpGetJson(url)
     if not data or type(data.data) ~= "table" then return {} end
     return data.data
@@ -2997,21 +2996,35 @@ end
 local function pickBestServer()
     local servers = fetchServers()
     local candidates = {}
+    local currentJob = tostring(game.JobId):lower()
+    local minPlayers = tonumber(settings["MinPlayerCount"]) or 4
 
     for _, srv in ipairs(servers) do
-        if type(srv) == "table"
-            and srv.id
-            and srv.id ~= game.JobId
-            and not table.find(hopState.visitedJobs, srv.id)
-            and (srv.playing or 0) > (tonumber(settings["MinPlayerCount"]) or 4)
-            and (srv.playing or 0) < (srv.maxPlayers or 999)
-        then
-            table.insert(candidates, srv)
+        if type(srv) == "table" and type(srv.id) == "string" then
+            local srvId = srv.id:lower()
+            
+            if srvId ~= currentJob then
+                local isVisited = false
+                for _, v in ipairs(hopState.visitedJobs) do
+                    if type(v) == "string" and v:lower() == srvId then
+                        isVisited = true
+                        break
+                    end
+                end
+
+                local playing = tonumber(srv.playing) or 0
+                local maxPlayers = tonumber(srv.maxPlayers) or 999
+
+                if not isVisited and playing >= minPlayers and playing < maxPlayers then
+                    table.insert(candidates, srv)
+                end
+            end
         end
     end
 
     table.sort(candidates, function(a, b)
-        local pa, pb = a.playing or 0, b.playing or 0
+        local pa = tonumber(a.playing) or 0
+        local pb = tonumber(b.playing) or 0
         if pa ~= pb then return pa > pb end
         return (a.id or "") > (b.id or "")
     end)
@@ -3023,7 +3036,10 @@ local hopping = false
 
 local function rememberJob(id)
     if not id or id == "" then return end
-    if table.find(hopState.visitedJobs, id) then return end
+    local lowerId = tostring(id):lower()
+    for _, v in ipairs(hopState.visitedJobs) do
+        if type(v) == "string" and v:lower() == lowerId then return end
+    end
     table.insert(hopState.visitedJobs, id)
     while #hopState.visitedJobs > HOP_STATE_MAX_JOBS do
         table.remove(hopState.visitedJobs, 1)
@@ -3035,8 +3051,7 @@ local function serverHop(reason)
     if hopping then return end
     local maxAttempts = tonumber(settings["MaxHopAttempts"]) or 10
     if hopState.attempts >= maxAttempts then
-        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s")
-            :format(hopState.attempts, maxAttempts, tostring(reason)))
+        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s"):format(hopState.attempts, maxAttempts, tostring(reason)))
         return
     end
 
@@ -3047,24 +3062,36 @@ local function serverHop(reason)
     local wasFarming = farming
     if wasFarming ~= nil then farming = false end
 
-    local target = pickBestServer()
-    if target then rememberJob(target.id) end
-    saveHopState(hopState)
-
-    local ok, err
-    if target then
-        ok, err = pcall(function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, players.LocalPlayer)
-        end)
-    else
-        setStatus("[AutoHop] No suitable server found, falling back to random teleport")
-        ok, err = pcall(function()
-            TeleportService:Teleport(game.PlaceId, players.LocalPlayer)
-        end)
+    local target = nil
+    for attempt = 1, 3 do
+        target = pickBestServer()
+        if target and tostring(target.id):lower() ~= tostring(game.JobId):lower() then
+            break
+        end
+        target = nil
+        task.wait(1)
     end
 
-    if not ok then
-        setStatus("[AutoHop] Teleport failed: " .. tostring(err))
+    if target and tostring(target.id):lower() == tostring(game.JobId):lower() then
+        target = nil
+    end
+
+    saveHopState(hopState)
+
+    if target then
+        rememberJob(target.id)
+        saveHopState(hopState)
+        setStatus(("[AutoHop] Teleporting to new server: %s"):format(target.id))
+        local ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, players.LocalPlayer)
+        end)
+        if not ok then
+            setStatus("[AutoHop] Teleport failed: " .. tostring(err))
+            if wasFarming ~= nil then farming = wasFarming end
+            hopping = false
+        end
+    else
+        setStatus("[AutoHop] Could not find a new server. Cancelling hop to avoid rejoining.")
         if wasFarming ~= nil then farming = wasFarming end
         hopping = false
     end
