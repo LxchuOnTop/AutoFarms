@@ -2967,6 +2967,10 @@ local function saveHopState(state)
 end
 
 local hopState = loadHopState()
+local serverCache = { data = nil, time = 0 }
+local SERVER_CACHE_TTL = 12
+local lastHopAttemptTime = 0
+local HOP_ATTEMPT_COOLDOWN = 5
 
 _G._tokyoResetHopCounter = function()
     hopState.attempts = 0
@@ -2999,37 +3003,45 @@ local function httpGetJson(url)
     for _, fn in ipairs(providers) do
         local ok, res = pcall(fn)
         if ok and type(res) == "table" and res.Body then
-            if not res.StatusCode or res.StatusCode == 200 then
-                body = res.Body
-                break
-            end
+            body = res.Body
+            break
         end
     end
 
     if not body then
         local ok, raw = pcall(function() return game:HttpGet(url) end)
-        if ok and type(raw) == "string" then 
-            body = raw 
-        end
+        if ok and type(raw) == "string" then body = raw end
     end
 
     if not body then return nil end
     if string.sub(body, 1, 1) ~= "{" then return nil end
-    
+
     local ok, data = pcall(httpService.JSONDecode, httpService, body)
     if not ok or type(data) ~= "table" then return nil end
     return data
 end
 
-local function fetchServers()
+local function fetchServers(forceRefresh)
+    local now = os.clock()
+
+    if not forceRefresh and serverCache.data and (now - serverCache.time) < SERVER_CACHE_TTL then
+        return serverCache.data
+    end
+
     local cacheBuster = tostring(os.time())
     local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100&_=%s"):format(game.PlaceId, cacheBuster)
     local data = httpGetJson(url)
-    if not data or type(data.data) ~= "table" then return {} end
+
+    if not data or type(data.data) ~= "table" then
+        return serverCache.data or {}
+    end
+
+    serverCache.data = data.data
+    serverCache.time = now
     return data.data
 end
 
-local function pickBestServer(ignoreMinPlayers, ignoreVisited)
+local function pickBestServer(ignoreMinPlayers, ignoreVisited, forceRefresh)
     local servers = fetchServers()
     local candidates = {}
     local currentJob = tostring(game.JobId):lower()
@@ -3089,15 +3101,23 @@ local function serverHop(reason)
     if not settings["ServerHopEnabled"] then return end
     if hopping then return end
 
-    local maxAttempts = tonumber(settings["MaxHopAttempts"]) or 10
-    if hopState.attempts >= maxAttempts then
-        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s"):format(hopState.attempts, maxAttempts, tostring(reason)))
+    local now = os.clock()
+    if now - lastHopAttemptTime < HOP_ATTEMPT_COOLDOWN then
         return
     end
 
+    local maxAttempts = tonumber(settings["MaxHopAttempts"]) or 10
+    if hopState.attempts >= maxAttempts then
+        setStatus(("[AutoHop] Max attempts reached (%d/%d). Giving up. Reason: %s")
+            :format(hopState.attempts, maxAttempts, tostring(reason)))
+        return
+    end
+
+    lastHopAttemptTime = now
     hopping = true
     hopState.attempts = hopState.attempts + 1
-    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s"):format(hopState.attempts, maxAttempts, tostring(reason)))
+    setStatus(("[AutoHop] Attempt %d/%d | Reason: %s")
+        :format(hopState.attempts, maxAttempts, tostring(reason)))
 
     local wasFarming = farming
     if wasFarming ~= nil then farming = false end
@@ -3108,22 +3128,16 @@ local function serverHop(reason)
     end
 
     local target, serverCount = pickBestServer()
-    
+
     if not target then
         hopState.visitedJobs = { tostring(game.JobId):lower() }
-        target = pickBestServer()
+        saveHopState(hopState)
+        target, serverCount = pickBestServer(false, false, true)
     end
 
     if not target then
-        target = pickBestServer(true, false)
-    end
-
-    if not target then
-        target = pickBestServer(true, true)
-    end
-
-    if not target then
-        setStatus(("[AutoHop] API returned %d servers, but none are valid. Try again later."):format(serverCount or 0))
+        setStatus(("[AutoHop] No valid servers found (API returned %d). Will retry after cooldown.")
+            :format(serverCount or 0))
         if wasFarming ~= nil then farming = wasFarming end
         hopping = false
         return
